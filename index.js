@@ -13,7 +13,7 @@ import { runIo } from "./src/modules/chat/chat.socket.controller.js";
 
 
 const app = express()
-const port = process.env.PORT||5000
+const port = process.env.PORT||3000
 
 bootstap(app ,express)
 
