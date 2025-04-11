@@ -17,6 +17,9 @@ const port = process.env.PORT||3000
 
 bootstap(app ,express)
 
+app.get("/", (req, res) => {
+    res.send("✅ Yalla Bina server is running!");
+});
 
 
 const httpServer = app.listen(port, () => {
