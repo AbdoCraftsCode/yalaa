@@ -39,7 +39,7 @@ export const login = asyncHandelr(async (req, res, next) => {
         expiresIn: 31536000,
     });
 
-    return successresponse(res, "Done", 200, { access_Token, refreshToken });
+    return successresponse(res, "Done", 200, { access_Token, refreshToken, checkUser });
 });
 export const loginwithGmail = asyncHandelr(async (req, res, next) => {
     const { idToken } = req.body;
