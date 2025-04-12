@@ -8,6 +8,7 @@ import { OAuth2Client } from "google-auth-library";
 import { generatetoken } from "../../../utlis/security/Token.security.js";
 import cloud from "../../../utlis/multer/cloudinary.js"
 import { ImageModel } from "../../../DB/models/images.model.js";
+import { ClassModel } from "../../../DB/models/Company.model.js";
 // export const signup = asyncHandelr(async (req, res, next) => {
     
 //     const { username, email, confirmationpassword, DOB, password, mobileNumber } = req.body
@@ -42,7 +43,7 @@ import { ImageModel } from "../../../DB/models/images.model.js";
 // })
 
 export const signup = asyncHandelr(async (req, res, next) => {
-    const { username, email, password, confirmationpassword } = req.body;
+    const { username, email, classId, password, confirmationpassword, image, gender,  } = req.body;
     console.log(username, email, password);
 
     const checkUser = await dbservice.findOne({ model: Usermodel, filter: { email } });
@@ -73,13 +74,13 @@ export const signup = asyncHandelr(async (req, res, next) => {
 
     const user = await dbservice.create({
         model: Usermodel,
-        data: { username, email, password: hashPassword, userId }
+        data: { username, email, password: hashPassword, userId, image, gender, classId }
     });
 
 
     Emailevent.emit("confirmemail", { email });
 
-    return successresponse(res, "User created successfully", 201, { user });
+    return successresponse(res, "User created successfully", 201, );
 });
 
 export const confirmOTP = asyncHandelr(
@@ -213,30 +214,79 @@ export const signupwithGmail = asyncHandelr(async (req, res, next) => {
 
 
 export const createImages = asyncHandelr(async (req, res, next) => {
+    console.log(req.file); // مش req.files
 
-
-
- 
-    console.log(req.files);
-
-    if (!req.files || req.files.length === 0) {
-        return next(new Error("❌ يجب رفع صورة واحدة على الأقل!", { cause: 400 }));
+    if (!req.file) {
+        return next(new Error("❌ يجب رفع صورة واحدة!", { cause: 400 }));
     }
 
-
-    const images = await Promise.all(req.files.map(async (file) => {
-        const uploadedImage = await cloud.uploader.upload(file.path, { folder: `images` });
-        return { secure_url: uploadedImage.secure_url, public_id: uploadedImage.public_id };
-    }));
+    const uploadedImage = await cloud.uploader.upload(req.file.path, { folder: `images` });
 
     const product = await ImageModel.create({
-
-        image: images
+        image: {
+            secure_url: uploadedImage.secure_url,
+            public_id: uploadedImage.public_id
+        }
     });
 
-    return successresponse(res, "✅ تم رفع الصور بنجاح بواسطه مستر عبده!", 201);
+    return successresponse(res, "✅ تم رفع الصورة بنجاح بواسطة مستر عبده!", 201);
 });
+
+
 export const getAllImages = asyncHandelr(async (req, res, next) => {
     const images = await ImageModel.find();
     return successresponse(res, "✅ تم جلب الصور بنجاح", 200, images);
+});
+
+ 
+export const Getprofiledata = asyncHandelr(async (req, res, next) => {
+    const user = await Usermodel.findById(req.user._id).populate("image");
+    console.log("👤 User object:", user);
+    console.log("🖼️ User image:", user.image);
+
+    if (!user) {
+        return next(new Error("User not found in system", { cause: 404 }));
+    }
+
+    // استخراج secure_url من الصورة
+    let imageURL = null;
+    if (user.image && user.image.image?.secure_url) {
+        imageURL = user.image.image.secure_url;
+    }
+
+    return successresponse(res, {
+        user: {
+            _id: user._id,
+            name: user.name,
+            email: user.email,
+            image: imageURL
+        }
+    });
+});
+export const createClass = asyncHandelr(async (req, res, next) => {
+    const { name } = req.body;
+
+    if (!name) {
+        return next(new Error("❌ الاسم مطلوب", { cause: 400 }));
+    }
+
+    const exist = await ClassModel.findOne({ name });
+    if (exist) {
+        return next(new Error("❌ الصف الدراسي موجود بالفعل", { cause: 409 }));
+    }
+
+    const newClass = await ClassModel.create({ name });
+
+    res.status(201).json({
+        message: "✅ تم إنشاء الصف الدراسي بنجاح",
+      
+    });
+});
+export const getAllClasses = asyncHandelr(async (req, res) => {
+    const classes = await ClassModel.find().sort({ createdAt: -1 }); // أحدث صف في الأول
+
+    res.status(200).json({
+        message: "✅ تم جلب الصفوف الدراسية بنجاح",
+        classes
+    });
 });

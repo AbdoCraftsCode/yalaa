@@ -38,9 +38,17 @@ const userSchema = new mongoose.Schema(
         updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
         changecredintialTime: { type: Date },
 
-        profilePic: { secure_url: String, public_id: String },
-        coverPic: [{ secure_url: String, public_id: String }],
-        uploadedFiles: [{ secure_url: String, public_id: String, format: String }],
+        // profilePic: { secure_url: String, public_id: String },
+        // coverPic: [{ secure_url: String, public_id: String }],
+        // uploadedFiles: [{ secure_url: String, public_id: String, format: String }],
+        image: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "Image"
+        },
+        classId: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "Class"
+        },
         userId: String,
         emailOTP: String,
         forgetpasswordOTP: String,

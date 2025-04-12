@@ -2,12 +2,12 @@ import mongoose from "mongoose";
 
 
 const imageSchema = new mongoose.Schema({
-    image: [
+    image: 
         {
             secure_url: String,
             public_id: String
         }
-    ]
+    
 
 }, { timestamps: true });
 
