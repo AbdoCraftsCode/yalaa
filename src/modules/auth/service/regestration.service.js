@@ -9,6 +9,11 @@ import { generatetoken } from "../../../utlis/security/Token.security.js";
 import cloud from "../../../utlis/multer/cloudinary.js"
 import { ImageModel } from "../../../DB/models/images.model.js";
 import { ClassModel } from "../../../DB/models/Company.model.js";
+import { QuestionModel } from "../../../DB/models/question.model.js";
+import { SubjectModel } from "../../../DB/models/supject.model.js";
+import { RankModel } from "../../../DB/models/rank.model.js";
+import { PointModel } from "../../../DB/models/points.model.js";
+import { AnswerModel } from "../../../DB/models/anser.model.js";
 // export const signup = asyncHandelr(async (req, res, next) => {
     
 //     const { username, email, confirmationpassword, DOB, password, mobileNumber } = req.body
@@ -282,6 +287,22 @@ export const createClass = asyncHandelr(async (req, res, next) => {
       
     });
 });
+
+export const createSupject = asyncHandelr(async (req, res, next) => {
+    const { name, classId } = req.body;
+
+    if (!name) {
+        return next(new Error("❌ الاسم مطلوب", { cause: 400 }));
+    }
+
+  
+    const newClass = await SubjectModel.create({ name, classId });
+
+    res.status(201).json({
+        message: "✅ تم إنشاء  الماده بنجاح",
+
+    });
+});
 export const getAllClasses = asyncHandelr(async (req, res) => {
     const classes = await ClassModel.find().sort({ createdAt: -1 }); // أحدث صف في الأول
 
@@ -289,4 +310,148 @@ export const getAllClasses = asyncHandelr(async (req, res) => {
         message: "✅ تم جلب الصفوف الدراسية بنجاح",
         classes
     });
+});
+
+
+
+
+export const addQuestion = asyncHandelr(async (req, res, next) => {
+    const { title, options, correctAnswer, mark, subject: subjectId, class: classId } = req.body;
+
+   
+    if (!title || !options || !correctAnswer || !mark || !subjectId || !classId) {
+        return next(new Error("❌ كل الحقول مطلوبة", { cause: 400 }));
+    }
+
+    const question = await QuestionModel.create({
+        title,
+        options,
+        correctAnswer,
+        mark,
+        subject: subjectId,
+        class: classId
+    });
+
+    return successresponse(res, "✅ تم إضافة السؤال بنجاح", 201,);
+});
+
+
+
+
+
+export const submitAnswer = asyncHandelr(async (req, res, next) => {
+    const { questionId, selectedAnswer } = req.body;
+    const userId = req.user._id;
+
+    // 1. تأكد من وجود السؤال
+    const question = await QuestionModel.findById(questionId);
+    if (!question) {
+        return next(new Error("❌ السؤال غير موجود", { cause: 404 }));
+    }
+
+    // 2. تحقق إذا كان المستخدم جاوب على السؤال قبل كده
+    const existingAnswer = await AnswerModel.findOne({
+        user: userId,
+        question: questionId
+    });
+
+    if (existingAnswer) {
+        return successresponse(res, "✅ تم تسجيل إجابتك، ولكنك أجبت على هذا السؤال من قبل، لن يتم احتساب الدرجة مرة أخرى", 200);
+    }
+
+    // 3. تحقق هل الإجابة صحيحة
+    const isCorrect = question.correctAnswer === selectedAnswer;
+    const mark = isCorrect ? parseInt(question.mark) : 0;
+
+    // 4. سجل الإجابة
+    await AnswerModel.create({
+        user: userId,
+        question: question._id,
+        selectedAnswer,
+        isCorrect
+    });
+
+    // 5. تحديث النقاط
+    if (isCorrect) {
+        await PointModel.findOneAndUpdate(
+            { user: userId },
+            { $inc: { totalPoints: mark } },
+            { upsert: true, new: true }
+        );
+
+        await RankModel.findOneAndUpdate(
+            { user: userId, class: question.class },
+            { $inc: { totalPoints: mark } },
+            { upsert: true, new: true }
+        );
+    }
+
+    return successresponse(res, `✅ تم تسجيل إجابتك ${isCorrect ? 'وحصلت على ' + mark + ' درجة' : 'ولكنها غير صحيحة'}`, 200);
+});
+
+
+
+export const getMyRank = asyncHandelr(async (req, res, next) => {
+    const userId = req.user._id;
+
+    // جلب بيانات الترتيب الخاصة بالطالب
+    const myRankData = await RankModel.findOne({ user: userId }).populate("class");
+    if (!myRankData) {
+        return next(new Error("❌ لم يتم العثور على بيانات الترتيب الخاصة بك", { cause: 404 }));
+    }
+
+    // جلب جميع الطلاب في نفس الصف وترتيبهم بناءً على النقاط تنازليًا
+    const allRanksInClass = await RankModel.find({ class: myRankData.class._id })
+        .sort({ totalPoints: -1 });
+
+    // حساب الترتيب الخاص بالمستخدم
+    const rankPosition = allRanksInClass.findIndex(rank => rank.user.toString() === userId.toString()) + 1;
+
+    return successresponse(res, {
+        rank: {
+            username: req.user.username,
+            userId: req.user.userId,
+            class: myRankData.class.name,
+            totalPoints: myRankData.totalPoints,
+            position: rankPosition,
+        }
+    });
+});
+
+
+
+
+export const getQuestionsByClassAndSubject = asyncHandelr(async (req, res, next) => {
+    const { classId, subjectId } = req.body;
+
+    if (!classId || !subjectId) {
+        return next(new Error("❌ يجب إرسال classId و subjectId في الرابط", { cause: 400 }));
+    }
+
+    const questions = await QuestionModel.find({
+        class: classId,
+        subject: subjectId
+    }).select("title options"); // نرجّع فقط عنوان السؤال والاختيارات
+
+    return res.status(200).json({
+        success: true,
+        message: "✅ تم جلب الأسئلة بنجاح حسب الصف والمادة",
+        data: questions
+    });
+});
+
+
+export const getSubjectsByClass = asyncHandelr(async (req, res, next) => {
+  const { classId } = req.params;
+
+  if (!classId) {
+    return next(new Error("❌ يجب تحديد الصف الدراسي", { cause: 400 }));
+  }
+
+    const subjects = await SubjectModel.find({ classId: classId });
+
+  return res.status(200).json({
+    message: "✅ تم جلب المواد الدراسية بنجاح",
+    subjects
+  });
 });
