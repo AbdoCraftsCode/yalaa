@@ -141,12 +141,12 @@ export const confirmOTP = asyncHandelr(
         );
         const access_Token = generatetoken({
             payload: { id: user._id },
-            signature: user.role === roletypes.Admin ? process.env.SYSTEM_ACCESS_TOKEN : process.env.USER_ACCESS_TOKEN,
+            // signature: user.role === roletypes.Admin ? process.env.SYSTEM_ACCESS_TOKEN : process.env.USER_ACCESS_TOKEN,
         });
 
         const refreshToken = generatetoken({
             payload: { id: user._id },
-            signature: user.role === roletypes.Admin ? process.env.SYSTEM_REFRESH_TOKEN : process.env.USER_REFRESH_TOKEN,
+            // signature: user.role === roletypes.Admin ? process.env.SYSTEM_REFRESH_TOKEN : process.env.USER_REFRESH_TOKEN,
             expiresIn: "365d"
         });
 

@@ -39,3 +39,6 @@ routr.get("/getSubjectsByClass/:classId", getSubjectsByClass)
 routr.get("/getQuestionsByClassAndSubject", getQuestionsByClassAndSubject)
 
 export default routr
+
+
+
