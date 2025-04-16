@@ -25,8 +25,8 @@ export const authenticationSocket = async ({ socket = {}, tokenType = tokenTypes
                 refreshSignature = process.env.SYSTEM_REFRESH_TOKEN;
                 break;
             case 'Bearer':
-                accessSignature = process.env.USER_ACCESS_TOKEN;
-                refreshSignature = process.env.USER_REFRESH_TOKEN;
+                accessSignature = process.env.JWT_SECRET;
+                refreshSignature = process.env.JWT_SECRET;
                 break;
             default:
                 return { data: { message: "Invalid bearer type", status: 400 } }
