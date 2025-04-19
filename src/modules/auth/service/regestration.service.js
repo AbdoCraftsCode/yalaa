@@ -432,9 +432,18 @@ export const getMyRank = asyncHandelr(async (req, res, next) => {
         return next(new Error("❌ لم يتم العثور على بيانات الترتيب الخاصة بك", { cause: 404 }));
     }
 
+    // جلب بيانات المستخدم مع الصورة
+    const userData = await Usermodel.findById(userId).populate({
+        path: "image",
+        select: "secure_url"
+    });
+
+    if (!userData) {
+        return next(new Error("❌ المستخدم غير موجود", { cause: 404 }));
+    }
+
     // جلب جميع الطلاب في نفس الصف وترتيبهم بناءً على النقاط تنازليًا
-    const allRanksInClass = await RankModel.find({ class: myRankData.class._id })
-        .sort({ totalPoints: -1 });
+    const allRanksInClass = await RankModel.find({ class: myRankData.class._id }).sort({ totalPoints: -1 });
 
     // حساب الترتيب الخاص بالمستخدم
     const rankPosition = allRanksInClass.findIndex(rank => rank.user.toString() === userId.toString()) + 1;
@@ -445,10 +454,12 @@ export const getMyRank = asyncHandelr(async (req, res, next) => {
             userId: req.user.userId,
             class: myRankData.class.name,
             totalPoints: myRankData.totalPoints,
+            image: userData.image?.secure_url || userData.image?.image?.secure_url || null, // ✅ يعالج الحالتين
             position: rankPosition,
         }
     });
 });
+
 
 
 
