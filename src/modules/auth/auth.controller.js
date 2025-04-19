@@ -5,6 +5,7 @@ import { addQuestion, adduser, confirmOTP, createClass, createImages, createSupj
 import { forgetpassword,   login, loginwithGmail, refreshToken, resetpassword } from "./service/authontecation.service.js";
 import { authentication } from "../../middlewere/authontcation.middlewere.js";
 import { fileValidationTypes, uploadCloudFile } from "../../utlis/multer/cloud.multer.js";
+import { findonechat } from "../chat/chat/chat.service.js";
 
 const routr = Router()
 
@@ -23,6 +24,7 @@ routr.post("/createImages",
 routr.post("/addQuestion", addQuestion)
 routr.post("/submitAnswer", authentication(), submitAnswer)
 routr.get("/getMyRank", authentication(), getMyRank)
+routr.get("/findonechat/:destId", authentication(), findonechat)
 routr.get("/GetFriendsList", authentication(),GetFriendsList)
 routr.post("/signupwithGmail", signupwithGmail)
 routr.post("/adduser/:friendId", authentication(),adduser)
