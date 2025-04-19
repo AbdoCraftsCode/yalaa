@@ -414,8 +414,11 @@ export const submitAnswer = asyncHandelr(async (req, res, next) => {
             { upsert: true, new: true }
         );
     }
+    return successresponse(res, {
+        success: true,
+        message: `✅ تم تسجيل إجابتك ${isCorrect ? 'وحصلت على ' + mark + ' درجة' : 'ولكنها غير صحيحة'}`
+    }, 200);
 
-    return successresponse(res, `✅ تم تسجيل إجابتك ${isCorrect ? 'وحصلت على ' + mark + ' درجة' : 'ولكنها غير صحيحة'}`, 200);
 });
 
 
