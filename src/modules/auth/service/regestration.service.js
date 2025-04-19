@@ -268,6 +268,35 @@ export const Getprofiledata = asyncHandelr(async (req, res, next) => {
         }
     });
 });
+
+
+export const GetFriendsList = asyncHandelr(async (req, res, next) => {
+    const user = await Usermodel.findById(req.user._id)
+        .populate({
+            path: "friends",
+            select: "username image", // هنجيب بس الاسم والصورة
+            populate: {
+                path: "image",
+                select: "image.secure_url"
+            }
+        });
+
+    if (!user) {
+        return next(new Error("User not found", { cause: 404 }));
+    }
+
+    // تنسيق البيانات المستخرجة
+    const friendsData = user.friends.map(friend => ({
+        _id: friend._id,
+        username: friend.username,
+        image: friend.image?.image?.secure_url || null
+    }));
+
+    return successresponse(res, {
+        friends: friendsData
+    });
+});
+
 export const createClass = asyncHandelr(async (req, res, next) => {
     const { name } = req.body;
 
@@ -454,4 +483,53 @@ export const getSubjectsByClass = asyncHandelr(async (req, res, next) => {
     message: "✅ تم جلب المواد الدراسية بنجاح",
     subjects
   });
+});
+
+
+
+
+
+export const adduser = asyncHandelr(async (req, res, next) => {
+    const { friendId } = req.params
+    const friend = await dbservice.findOneAndUpdate({
+
+        model: Usermodel,
+        filter: {
+            _id: friendId,
+
+        },
+        data: {
+
+            $addToSet: { friends: req.user._id }
+        },
+        options: {
+            new: true,
+        }
+
+    })
+
+    if (!friend) {
+
+        return next(new Error("invalied-friendId", { cause: 404 }))
+
+    }
+    const user = await dbservice.findOneAndUpdate({
+
+        model: Usermodel,
+        filter: {
+            _id: req.user._id,
+            isDeleted: false,
+
+        },
+        data: {
+
+            $addToSet: { friends: friendId }
+        },
+        options: {
+            new: true,
+        }
+    })
+
+
+    return successresponse(res,);
 });

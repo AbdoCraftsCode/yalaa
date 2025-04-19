@@ -8,7 +8,7 @@ export const providerTypes = { system: "system", google: "google" }
 const userSchema = new mongoose.Schema(
     {
 
-        
+        friends: [{ type: Types.ObjectId, ref: "User" }],
         email: { type: String, unique: true, required: true },
         password: { type: String },
         provider: { type: String, enum: Object.values(providerTypes),default:providerTypes.system },
@@ -37,10 +37,9 @@ const userSchema = new mongoose.Schema(
         isOnline: { type: Boolean, default: false },
         updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
         changecredintialTime: { type: Date },
-
-        // profilePic: { secure_url: String, public_id: String },
-        // coverPic: [{ secure_url: String, public_id: String }],
-        // uploadedFiles: [{ secure_url: String, public_id: String, format: String }],
+        isBusy: { type: Boolean, default: false },
+        isSearching: { type: Boolean, default: false },
+    
         image: {
             type: mongoose.Schema.Types.ObjectId,
             ref: "Image"

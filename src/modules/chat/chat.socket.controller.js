@@ -19,6 +19,7 @@ export const runIo = (httpServer) => {
         await sendMessage(socket);
         await regiserSocket(socket);
         await logoutSocket(socket);
+        await startSearching(socket); 
     });
 
 
