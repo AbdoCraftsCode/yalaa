@@ -6,8 +6,8 @@ const questionSchema = new mongoose.Schema({
     options: [{ type: String, required: true }],
     correctAnswer: { type: String, required: true },
     subject: { type: mongoose.Schema.Types.ObjectId, ref: "Subject", required: true },
-    class: { type: mongoose.Schema.Types.ObjectId, ref: "Class", required: true }
-   
+    class: { type: mongoose.Schema.Types.ObjectId, ref: "Class", required: true },
+    isAnswer: { type: Boolean, default: false },
 }, { timestamps: true });
 
 export const QuestionModel = mongoose.model("Question", questionSchema);

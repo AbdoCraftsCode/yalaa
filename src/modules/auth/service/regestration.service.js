@@ -399,7 +399,7 @@ export const submitAnswer = asyncHandelr(async (req, res, next) => {
         selectedAnswer,
         isCorrect
     });
-
+    await QuestionModel.findByIdAndUpdate(questionId, { isAnswer: true });
     // 5. تحديث النقاط
     if (isCorrect) {
         await PointModel.findOneAndUpdate(
@@ -473,7 +473,11 @@ export const getQuestionsByClassAndSubject = asyncHandelr(async (req, res, next)
 
     const questions = await QuestionModel.find({
         class: classId,
-        subject: subjectId
+        subject: subjectId,
+        $or: [
+            { isAnswer: false },
+            { isAnswer: { $exists: false } }
+        ]
     }).select("title options"); // نرجّع فقط عنوان السؤال والاختيارات
 
     return res.status(200).json({
@@ -547,3 +551,40 @@ export const adduser = asyncHandelr(async (req, res, next) => {
 
     return successresponse(res,);
 });
+
+
+
+
+
+
+export const getAllRanks = asyncHandelr(async (req, res, next) => {
+    const allRanks = await RankModel.find()
+        .sort({ totalPoints: -1 })
+        .populate("class")
+        .populate({
+            path: "user",
+            select: "username image",
+            populate: {
+                path: "image",
+                select: "image.secure_url"
+            }
+        });
+
+    const rankedUsers = allRanks
+        .filter(rank => rank.user !== null)
+        .map((rank, index) => ({
+            username: rank.user.username,
+            userId: rank.user._id,
+            class: rank.class?.name || null,
+            totalPoints: rank.totalPoints,
+            position: index + 1,
+            image: rank.user.image?.image?.secure_url || null
+        }));
+
+    return successresponse(res, {
+        count: rankedUsers.length,
+        students: rankedUsers
+    });
+});
+
+

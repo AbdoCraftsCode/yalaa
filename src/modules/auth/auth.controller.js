@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { validation } from "../../middlewere/validation.middlewere.js";
 import  * as validators from "../auth/auth.validate.js"
-import { addQuestion, adduser, confirmOTP, createClass, createImages, createSupject, getAllClasses, getAllImages, GetFriendsList, getMyRank, Getprofiledata, getQuestionsByClassAndSubject, getSubjectsByClass, signup, signupwithGmail, submitAnswer } from "./service/regestration.service.js";
+import { addQuestion, adduser, confirmOTP, createClass, createImages, createSupject, getAllClasses, getAllImages, getAllRanks, GetFriendsList, getMyRank, Getprofiledata, getQuestionsByClassAndSubject, getSubjectsByClass, signup, signupwithGmail, submitAnswer } from "./service/regestration.service.js";
 import { forgetpassword,   login, loginwithGmail, refreshToken, resetpassword } from "./service/authontecation.service.js";
 import { authentication } from "../../middlewere/authontcation.middlewere.js";
 import { fileValidationTypes, uploadCloudFile } from "../../utlis/multer/cloud.multer.js";
@@ -39,6 +39,7 @@ routr.post("/resetpassword", resetpassword)
 routr.post("/loginwithGmail", loginwithGmail)
 routr.get("/getAllImages", getAllImages)
 routr.get("/getAllClasses", getAllClasses)
+routr.get("/getAllRanks", getAllRanks)
 routr.get("/getSubjectsByClass/:classId", getSubjectsByClass)
 routr.post("/getQuestionsByClassAndSubject", getQuestionsByClassAndSubject)
 
