@@ -284,21 +284,21 @@ export const deleteCoverImage = asyncHandelr(async (req, res, next) => {
 
 // const transporter = nodemailer.createTransport({
 //     host: "smtp.mailersend.net",
-//     port: 2525, // أو 2525 لو 587 مش شغال
-//     secure: false, // استخدم true فقط مع port 465
+//     port: 2525, // أو جرب 2525 لو 587 مش شغال
+//     secure: false,
 //     auth: {
-//         user: "MS_reB7kP@test-z0vklo6q3dpl7qrx.mlsender.net",
-//         pass: "mssp.a9NtANX.pr9084z6qpxlw63d.RhWxCks",
+//         user: "MS_KzFRCI@megabox.live", // SMTP Username
+//         pass: "mssp.WhhcR90.351ndgwmxj5lzqx8.6Vbwyb", // SMTP Password
 //     },
 // });
 
 // const sendEmail = async () => {
 //     try {
 //         const info = await transporter.sendMail({
-//             from: '"WEVA" <weva@test-z0vklo6q3dpl7qrx.mlsender.net>', // لازم يكون نفس الدومين
-//             to: "yallabinaok@gmail.com", // الإيميل اللي هتجرب عليه
+//             from: `"YallaBina" <MS_KzFRCI@megabox.live>`, // 🟢 استخدم نفس الـ SMTP user هنا للتجربة المبدئية
+//             to: "wevaacademy853@gmail.com",
 //             subject: "📧 اختبار إرسال من MailerSend",
-//             html: "<h2>تم إرسال هذا الإيميل بنجاح عبر MailerSend SMTP 🚀</h2>",
+//             html: "<h2>✅ تم إرسال هذا الإيميل بنجاح عبر MailerSend SMTP 🚀</h2>",
 //         });
 
 //         console.log("✅ الإيميل تم إرساله:", info.messageId);
