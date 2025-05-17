@@ -14,6 +14,7 @@ import { SubjectModel } from "../../../DB/models/supject.model.js";
 import { RankModel } from "../../../DB/models/rank.model.js";
 import { PointModel } from "../../../DB/models/points.model.js";
 import { AnswerModel } from "../../../DB/models/anser.model.js";
+import bcrypt from "bcrypt"
 // import admin from 'firebase-admin';
 
 
@@ -158,6 +159,27 @@ export const confirmOTP = asyncHandelr(
 );
 
 
+export const resendOTP = asyncHandelr(async (req, res, next) => {
+    const { email } = req.body;
+
+    if (!email) {
+        return next(new Error("❌ يجب إدخال البريد الإلكتروني!", { cause: 400 }));
+    }
+
+    const user = await Usermodel.findOne({ email });
+    if (!user) {
+        return next(new Error("❌ البريد الإلكتروني غير موجود!", { cause: 404 }));
+    }
+
+    if (user.isConfirmed) {
+        return next(new Error("✅ البريد الإلكتروني تم تأكيده بالفعل!", { cause: 400 }));
+    }
+
+    // ✅ إرسال الحدث (هيستخدم الكود اللي انت كتبته بالفعل)
+    Emailevent.emit("confirmemail", { email });
+
+    return successresponse(res, "✅ تم إعادة إرسال رمز التحقق بنجاح!", 200);
+});
 
 
 export const signupwithGmail = asyncHandelr(async (req, res, next) => {
