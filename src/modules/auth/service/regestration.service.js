@@ -15,7 +15,9 @@ import { RankModel } from "../../../DB/models/rank.model.js";
 import { PointModel } from "../../../DB/models/points.model.js";
 import { AnswerModel } from "../../../DB/models/anser.model.js";
 import bcrypt from "bcrypt"
+import File from "../../../DB/models/files.conrroller.js";
 // import admin from 'firebase-admin';
+import fs from 'fs';
 
 
 // export const signup = asyncHandelr(async (req, res, next) => {
@@ -50,6 +52,75 @@ import bcrypt from "bcrypt"
 
 
 // })
+
+
+export const createFile = async (req, res) => {
+    try {
+        const userId = req.user._id; // جاية من الميدل وير عندك
+        const file = req.file;
+        const { shared = false } = req.body;
+
+        if (!file) return res.status(400).json({ message: 'يرجى رفع ملف.' });
+
+        const result = await cloud.uploader.upload(file.path, {
+            resource_type: "auto",
+            folder: "cloudbox",
+        });
+
+        const fileSizeMB = Math.ceil(file.size / (1024 * 1024));
+
+        const savedFile = await File.create({
+            userId,
+            fileName: file.originalname,
+            fileType: file.mimetype,
+            fileSize: fileSizeMB,
+            url: result.secure_url,
+            shared,
+            sharedUrl: shared ? result.secure_url : null,
+        });
+
+        fs.unlinkSync(file.path); // حذف من tmp
+
+        res.status(201).json({ message: '✅ تم رفع الملف', file: savedFile });
+    } catch (err) {
+        res.status(500).json({ message: '❌ خطأ أثناء الرفع', error: err.message });
+    }
+  };
+
+// src/controllers/file.controller.js
+export const getUserFiles = async (req, res) => {
+    try {
+        const userId = req.user._id;
+        const { type } = req.query; // مثال: ?type=image أو ?type=video
+
+        // التحقق إذا فيه نوع محدد
+        let filter = { userId };
+        if (type) {
+            const typeMap = {
+                image: ['image/jpg', 'image/jpeg', 'image/png', 'image/gif'],
+                video: ['video/mp4', 'video/mpeg', 'video/x-msvideo'],
+                document: ['application/pdf', 'application/json'],
+                zip: ['application/zip', 'application/x-zip-compressed'],
+            };
+
+            const mimeTypes = typeMap[type.toLowerCase()];
+            if (mimeTypes) {
+                filter.fileType = { $in: mimeTypes };
+            }
+        }
+
+        const files = await File.find(filter);
+        const totalUsed = files.reduce((sum, file) => sum + file.fileSize, 0);
+
+        res.status(200).json({
+            files,
+            totalUsedMB: totalUsed,
+        });
+    } catch (err) {
+        res.status(500).json({ message: '❌ خطأ في جلب الملفات', error: err.message });
+    }
+};
+  
 
 export const signup = asyncHandelr(async (req, res, next) => {
     const { username, email, classId, password, confirmationpassword, image, gender,  } = req.body;
@@ -619,4 +690,4 @@ export const getAllRanks = asyncHandelr(async (req, res, next) => {
 
 
 
-
+// CIENT_ID = '221980279766-k063a77vogpfreoegb4nui67olml16he.apps.googleusercontent.com'

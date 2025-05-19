@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { validation } from "../../middlewere/validation.middlewere.js";
 import  * as validators from "../auth/auth.validate.js"
-import { addQuestion, adduser, confirmOTP, createClass, createImages, createSupject, getAllClasses, getAllImages, getAllRanks, GetFriendsList, getMyRank, Getprofiledata, getQuestionsByClassAndSubject, getSubjectsByClass, resendOTP, signup, signupwithGmail, submitAnswer } from "./service/regestration.service.js";
+import { addQuestion, adduser, confirmOTP, createClass, createFile, createImages, createSupject, getAllClasses, getAllImages, getAllRanks, GetFriendsList, getMyRank, Getprofiledata, getQuestionsByClassAndSubject, getSubjectsByClass, getUserFiles, resendOTP, signup, signupwithGmail, submitAnswer } from "./service/regestration.service.js";
 import { forgetpassword,   login, loginwithGmail, refreshToken, resetpassword } from "./service/authontecation.service.js";
 import { authentication } from "../../middlewere/authontcation.middlewere.js";
 import { fileValidationTypes, uploadCloudFile } from "../../utlis/multer/cloud.multer.js";
@@ -20,10 +20,23 @@ routr.post("/createImages",
     uploadCloudFile(fileValidationTypes.image).single("image"),
     createImages
 )
+routr.post(
+    '/createFile',
+    authentication(),
+    uploadCloudFile([
+        ...fileValidationTypes.image,
+        ...fileValidationTypes.document,
+        ...fileValidationTypes.video,
+        // تم دمج zip ضمن document فلا داعي لها هنا
+    ]).single('file'),
+    createFile
+);
+
 routr.post("/resendOTP", resendOTP)
 routr.post("/addQuestion", addQuestion)
 routr.post("/submitAnswer", authentication(), submitAnswer)
 routr.get("/getMyRank", authentication(), getMyRank)
+routr.get("/getUserFiles", authentication(), getUserFiles)
 routr.get("/findonechat/:destId", authentication(), findonechat)
 routr.get("/GetFriendsList", authentication(),GetFriendsList)
 routr.post("/signupwithGmail", signupwithGmail)
