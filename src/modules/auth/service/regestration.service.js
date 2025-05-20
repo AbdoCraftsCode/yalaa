@@ -14,6 +14,7 @@ import { SubjectModel } from "../../../DB/models/supject.model.js";
 import { RankModel } from "../../../DB/models/rank.model.js";
 import { PointModel } from "../../../DB/models/points.model.js";
 import { AnswerModel } from "../../../DB/models/anser.model.js";
+import { nanoid } from 'nanoid';
 import bcrypt from "bcrypt"
 import File from "../../../DB/models/files.conrroller.js";
 // import admin from 'firebase-admin';
@@ -54,21 +55,41 @@ import fs from 'fs';
 // })
 
 
+
 export const createFile = async (req, res) => {
     try {
-        const userId = req.user._id; // جاية من الميدل وير عندك
+        const userId = req.user._id;
         const file = req.file;
         const { shared = false } = req.body;
 
-        if (!file) return res.status(400).json({ message: 'يرجى رفع ملف.' });
+        if (!file) {
+            return res.status(400).json({ message: "❌ يرجى رفع ملف." });
+        }
 
+        // تحديد نوع المورد المناسب
+        let resourceType = "raw"; // الافتراضي
+        if (file.mimetype.startsWith("image/")) resourceType = "image";
+        else if (file.mimetype.startsWith("video/")) resourceType = "video";
+
+        // رفع الملف إلى Cloudinary
         const result = await cloud.uploader.upload(file.path, {
-            resource_type: "auto",
+            resource_type: resourceType,
             folder: "cloudbox",
+            type: "upload", // مهم جدًا ليكون الملف عامًا
+            use_filename: true,
+            unique_filename: false, // عشان يحتفظ بالاسم الأصلي
         });
 
         const fileSizeMB = Math.ceil(file.size / (1024 * 1024));
 
+        // إنشاء رابط مشاركة إذا الملف مشترك
+        let sharedUrl = null;
+        if (shared === true || shared === "true") {
+            const uniqueId = nanoid(10);
+            sharedUrl = `https://yourapp.com/shared/${uniqueId}`;
+        }
+
+        // حفظ في قاعدة البيانات
         const savedFile = await File.create({
             userId,
             fileName: file.originalname,
@@ -76,17 +97,25 @@ export const createFile = async (req, res) => {
             fileSize: fileSizeMB,
             url: result.secure_url,
             shared,
-            sharedUrl: shared ? result.secure_url : null,
+            sharedUrl,
         });
 
-        fs.unlinkSync(file.path); // حذف من tmp
+        // حذف الملف المؤقت من السيرفر
+        fs.unlinkSync(file.path);
 
-        res.status(201).json({ message: '✅ تم رفع الملف', file: savedFile });
+        res.status(201).json({
+            message: "✅ تم رفع الملف بنجاح",
+            file: savedFile,
+            ...(sharedUrl && { sharedUrl }),
+        });
     } catch (err) {
-        res.status(500).json({ message: '❌ خطأ أثناء الرفع', error: err.message });
+        console.error(err);
+        res.status(500).json({
+            message: "❌ حدث خطأ أثناء رفع الملف",
+            error: err.message,
+        });
     }
   };
-
 // src/controllers/file.controller.js
 export const getUserFiles = async (req, res) => {
     try {
@@ -120,7 +149,64 @@ export const getUserFiles = async (req, res) => {
         res.status(500).json({ message: '❌ خطأ في جلب الملفات', error: err.message });
     }
 };
+
+export const shareFile = async (req, res) => {
+    try {
+        const fileId = req.params.id;
+
+        const file = await File.findById(fileId);
+        if (!file) return res.status(404).json({ message: '❌ الملف غير موجود' });
+
+        // لو فيه رابط مشاركة بالفعل
+        if (file.shared && file.sharedUrl) {
+            return res.status(200).json({
+                message: '✅ رابط المشاركة موجود بالفعل',
+                sharedUrl: file.sharedUrl,
+            });
+        }
+
+        const uniqueId = nanoid(10);
+        const sharedUrl = `https://yourapp.com/shared/${uniqueId}`; // عدل الرابط حسب نطاقك
+
+        file.shared = true;
+        file.sharedUrl = sharedUrl;
+
+        await file.save();
+
+        res.status(200).json({
+            message: '✅ تم إنشاء رابط المشاركة',
+            sharedUrl,
+        });
+    } catch (err) {
+        res.status(500).json({ message: '❌ حدث خطأ أثناء المشاركة', error: err.message });
+    }
+  };
+
+// في نفس controller أو ملف منفصل
+export const getSharedFile = async (req, res) => {
+    try {
+        const { uniqueId } = req.params;
+        const fullUrl = `https://yourapp.com/shared/${uniqueId}`;
+
+        const file = await File.findOne({ shared: true, sharedUrl: fullUrl });
+
+        if (!file) {
+            return res.status(404).json({ message: '❌ الملف غير موجود أو لم تتم مشاركته' });
+        }
+
+        res.status(200).json({
+            fileName: file.fileName,
+            fileType: file.fileType,
+            url: file.url,
+            createdAt: file.createdAt,
+        });
+    } catch (err) {
+        res.status(500).json({ message: '❌ خطأ في الوصول للملف المشترك', error: err.message });
+    }
+};
   
+
+
 
 export const signup = asyncHandelr(async (req, res, next) => {
     const { username, email, classId, password, confirmationpassword, image, gender,  } = req.body;

@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { validation } from "../../middlewere/validation.middlewere.js";
 import  * as validators from "../auth/auth.validate.js"
-import { addQuestion, adduser, confirmOTP, createClass, createFile, createImages, createSupject, getAllClasses, getAllImages, getAllRanks, GetFriendsList, getMyRank, Getprofiledata, getQuestionsByClassAndSubject, getSubjectsByClass, getUserFiles, resendOTP, signup, signupwithGmail, submitAnswer } from "./service/regestration.service.js";
+import { addQuestion, adduser, confirmOTP, createClass, createFile, createImages, createSupject, getAllClasses, getAllImages, getAllRanks, GetFriendsList, getMyRank, Getprofiledata, getQuestionsByClassAndSubject, getSharedFile, getSubjectsByClass, getUserFiles, resendOTP, shareFile, signup, signupwithGmail, submitAnswer } from "./service/regestration.service.js";
 import { forgetpassword,   login, loginwithGmail, refreshToken, resetpassword } from "./service/authontecation.service.js";
 import { authentication } from "../../middlewere/authontcation.middlewere.js";
 import { fileValidationTypes, uploadCloudFile } from "../../utlis/multer/cloud.multer.js";
@@ -45,7 +45,9 @@ routr.post("/createClass", createClass)
 routr.post("/createSupject", createSupject)
 routr.post("/confirmOTP", confirmOTP)
 routr.get("/Getprofiledata",authentication() ,Getprofiledata)
-routr.post("/login",login)
+routr.post("/login", login)
+routr.post("/shareFile/:id", shareFile)
+
 routr.post("/refreshToken",refreshToken)
 routr.post("/forgetpassword", forgetpassword)
 routr.post("/resetpassword", resetpassword)
@@ -53,6 +55,7 @@ routr.post("/loginwithGmail", loginwithGmail)
 routr.get("/getAllImages", getAllImages)
 routr.get("/getAllClasses", getAllClasses)
 routr.get("/getAllRanks", getAllRanks)
+routr.get("/getSharedFile/:uniqueId", getSharedFile)
 routr.get("/getSubjectsByClass/:classId", getSubjectsByClass)
 routr.post("/getQuestionsByClassAndSubject", getQuestionsByClassAndSubject)
 
