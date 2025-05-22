@@ -6,6 +6,7 @@ import { successresponse } from "../../../utlis/response/success.response.js";
 import {  decodedToken,  generatetoken,  tokenTypes } from "../../../utlis/security/Token.security.js";
 import { Emailevent } from "../../../utlis/events/email.emit.js";
 import { OAuth2Client } from "google-auth-library";
+import axios from 'axios';
 export const login = asyncHandelr(async (req, res, next) => {
     const { email, password } = req.body;
     console.log(email, password);
@@ -41,65 +42,65 @@ export const login = asyncHandelr(async (req, res, next) => {
 
     return successresponse(res, "Done", 200, { access_Token, refreshToken, checkUser });
 });
-export const loginwithGmail = asyncHandelr(async (req, res, next) => {
-    const { idToken } = req.body;
-    const client = new OAuth2Client();
+// export const loginwithGmail = asyncHandelr(async (req, res, next) => {
+//     const { idToken } = req.body;
+//     const client = new OAuth2Client();
 
-    async function verify() {
-        const ticket = await client.verifyIdToken({
-            idToken,
-            audience: process.env.CIENT_ID,
-        });
-        return ticket.getPayload();
-    }
+//     async function verify() {
+//         const ticket = await client.verifyIdToken({
+//             idToken,
+//             audience: process.env.CIENT_ID,
+//         });
+//         return ticket.getPayload();
+//     }
 
-    const payload = await verify();
-    console.log("Google Payload Data:", payload);
+//     const payload = await verify();
+//     console.log("Google Payload Data:", payload);
 
-    const { name, email, email_verified, picture } = payload;
+//     const { name, email, email_verified, picture } = payload;
 
-    if (!email) {
-        return next(new Error("Email is missing in Google response", { cause: 400 }));
-    }
-    if (!email_verified) {
-        return next(new Error("Email not verified", { cause: 404 }));
-    }
+//     if (!email) {
+//         return next(new Error("Email is missing in Google response", { cause: 400 }));
+//     }
+//     if (!email_verified) {
+//         return next(new Error("Email not verified", { cause: 404 }));
+//     }
 
-    let user = await dbservice.findOne({
-        model: Usermodel,
-        filter: { email },
-    });
+//     let user = await dbservice.findOne({
+//         model: Usermodel,
+//         filter: { email },
+//     });
 
-    if (user?.provider === providerTypes.system) {
-        return next(new Error("Invalid account", { cause: 404 }));
-    }
+//     if (user?.provider === providerTypes.system) {
+//         return next(new Error("Invalid account", { cause: 404 }));
+//     }
 
-    if (!user) {
-        user = await dbservice.create({
-            model: Usermodel,
-            data: {
-                email,
-                username: name,
-                profilePic: { secure_url: picture },
-                isConfirmed: email_verified,
-                provider: providerTypes.google,
-            },
-        });
-    }
+//     if (!user) {
+//         user = await dbservice.create({
+//             model: Usermodel,
+//             data: {
+//                 email,
+//                 username: name,
+//                 profilePic: { secure_url: picture },
+//                 isConfirmed: email_verified,
+//                 provider: providerTypes.google,
+//             },
+//         });
+//     }
 
-    const access_Token = generatetoken({
-        payload: { id: user._id },
-        signature: user?.role === roletypes.Admin ? process.env.SYSTEM_ACCESS_TOKEN : process.env.USER_ACCESS_TOKEN,
-    });
+//     const access_Token = generatetoken({
+//         payload: { id: user._id },
+//         signature: user?.role === roletypes.Admin ? process.env.SYSTEM_ACCESS_TOKEN : process.env.USER_ACCESS_TOKEN,
+//     });
 
-    const refreshToken = generatetoken({
-        payload: { id: user._id },
-        signature: user?.role === roletypes.Admin ? process.env.SYSTEM_REFRESH_TOKEN : process.env.USER_REFRESH_TOKEN,
-        expiresIn: 31536000,
-    });
-    return successresponse(res, "Login successful", 200, { access_Token, refreshToken })
+//     const refreshToken = generatetoken({
+//         payload: { id: user._id },
+//         signature: user?.role === roletypes.Admin ? process.env.SYSTEM_REFRESH_TOKEN : process.env.USER_REFRESH_TOKEN,
+//         expiresIn: 31536000,
+//     });
+//     return successresponse(res, "Login successful", 200, { access_Token, refreshToken })
 
-});
+// });
 
 export const refreshToken = asyncHandelr(async (req, res, next) => {
 
@@ -121,6 +122,75 @@ export const refreshToken = asyncHandelr(async (req, res, next) => {
     return successresponse(res, "Token refreshed successfully", 200, { accessToken, refreshToken: newRefreshToken });
 });
 
+
+
+export const loginwithGmail = asyncHandelr(async (req, res, next) => {
+    const { accessToken } = req.body;
+
+    if (!accessToken) {
+        return next(new Error("Access token is required", { cause: 400 }));
+    }
+
+    // Step 1: Use access token to fetch user info from Google
+    let userInfo;
+    try {
+        const response = await axios.get('https://www.googleapis.com/oauth2/v3/userinfo', {
+            headers: {
+                Authorization: `Bearer ${accessToken}`,
+            },
+        });
+        userInfo = response.data;
+    } catch (error) {
+        console.error("Failed to fetch user info from Google:", error?.response?.data || error.message);
+        return next(new Error("Failed to verify access token with Google", { cause: 401 }));
+    }
+
+    const { email, name, picture, email_verified } = userInfo;
+
+    if (!email) {
+        return next(new Error("Email is missing in Google response", { cause: 400 }));
+    }
+    if (!email_verified) {
+        return next(new Error("Email not verified", { cause: 403 }));
+    }
+
+    // Step 2: Check if user exists or create new one
+    let user = await dbservice.findOne({
+        model: Usermodel,
+        filter: { email },
+    });
+
+    if (user?.provider === providerTypes.system) {
+        return next(new Error("Invalid account. Please login using your email/password", { cause: 403 }));
+    }
+
+    if (!user) {
+        user = await dbservice.create({
+            model: Usermodel,
+            data: {
+                email,
+                username: name,
+                profilePic: { secure_url: picture },
+                isConfirmed: email_verified,
+                provider: providerTypes.google,
+            },
+        });
+    }
+
+    // Step 3: Generate access & refresh tokens
+    const access_Token = generatetoken({
+        payload: { id: user._id },
+        signature: user.role === roletypes.Admin ? process.env.SYSTEM_ACCESS_TOKEN : process.env.USER_ACCESS_TOKEN,
+    });
+
+    const refreshToken = generatetoken({
+        payload: { id: user._id },
+        signature: user.role === roletypes.Admin ? process.env.SYSTEM_REFRESH_TOKEN : process.env.USER_REFRESH_TOKEN,
+        expiresIn: 31536000,
+    });
+
+    return successresponse(res, "Login successful", 200, { access_Token, refreshToken });
+});
 
 
 export const forgetpassword = asyncHandelr(async (req, res, next) => {
