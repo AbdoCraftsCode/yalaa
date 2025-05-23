@@ -249,6 +249,29 @@ export const signup = asyncHandelr(async (req, res, next) => {
     return successresponse(res, "User created successfully", 201, );
 });
 
+export const getUserRoleById = asyncHandelr(async (req, res, next) => {
+    const { _id } = req.params;
+
+    // تأكد إن _id صالح
+    if (!_id.match(/^[0-9a-fA-F]{24}$/)) {
+        return res.status(400).json({ message: "Invalid user ID format" });
+    }
+
+    const user = await Usermodel.findById(_id).select("role");
+
+    if (!user) {
+        return res.status(404).json({ message: "User not found" });
+    }
+
+    return res.status(200).json({
+        message: "User role fetched successfully",
+        data: {
+            role: user.role,
+        },
+    });
+});
+
+
 export const confirmOTP = asyncHandelr(
     async (req, res, next) => {
         const { code, email } = req.body;
