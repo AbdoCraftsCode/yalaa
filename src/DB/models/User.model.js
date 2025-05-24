@@ -48,6 +48,10 @@ const userSchema = new mongoose.Schema(
             type: mongoose.Schema.Types.ObjectId,
             ref: "Class"
         },
+        profilePic: {
+            secure_url: { type: String, }, // الصورة مطلوبة
+            public_id: { type: String, }   // مهم لحذف الصور من Cloudinary
+        },
         userId: String,
         emailOTP: String,
         forgetpasswordOTP: String,

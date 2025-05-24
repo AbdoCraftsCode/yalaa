@@ -7,6 +7,7 @@ import {  decodedToken,  generatetoken,  tokenTypes } from "../../../utlis/secur
 import { Emailevent } from "../../../utlis/events/email.emit.js";
 import { OAuth2Client } from "google-auth-library";
 import axios from 'axios';
+import { nanoid } from 'nanoid';
 export const login = asyncHandelr(async (req, res, next) => {
     const { email, password } = req.body;
     console.log(email, password);
@@ -130,7 +131,7 @@ export const loginwithGmail = asyncHandelr(async (req, res, next) => {
         return next(new Error("Access token is required", { cause: 400 }));
     }
 
-    // Step 1: Use access token to fetch user info from Google
+    // Step 1: Get user info from Google
     let userInfo;
     try {
         const response = await axios.get('https://www.googleapis.com/oauth2/v3/userinfo', {
@@ -153,7 +154,7 @@ export const loginwithGmail = asyncHandelr(async (req, res, next) => {
         return next(new Error("Email not verified", { cause: 403 }));
     }
 
-    // Step 2: Check if user exists or create new one
+    // Step 2: Check if user exists
     let user = await dbservice.findOne({
         model: Usermodel,
         filter: { email },
@@ -163,7 +164,19 @@ export const loginwithGmail = asyncHandelr(async (req, res, next) => {
         return next(new Error("Invalid account. Please login using your email/password", { cause: 403 }));
     }
 
+    // ✅ Step 3: If not exist, create and generate userId
     if (!user) {
+        let userId;
+        let isUnique = false;
+        while (!isUnique) {
+            userId = Math.floor(1000000 + Math.random() * 9000000);
+            const existingUser = await dbservice.findOne({
+                model: Usermodel,
+                filter: { userId },
+            });
+            if (!existingUser) isUnique = true;
+        }
+
         user = await dbservice.create({
             model: Usermodel,
             data: {
@@ -172,24 +185,23 @@ export const loginwithGmail = asyncHandelr(async (req, res, next) => {
                 profilePic: { secure_url: picture },
                 isConfirmed: email_verified,
                 provider: providerTypes.google,
+                userId, // ✅ Add generated userId here
+                gender: "Male", // لو تقدر تجيبه من جوجل أو تخليه undefined
             },
         });
     }
 
-    // Step 3: Generate access & refresh tokens
+    // Step 4: Generate tokens
     const access_Token = generatetoken({
         payload: { id: user._id },
-        // signature: checkUser.role === roletypes.Admin ? process.env.SYSTEM_ACCESS_TOKEN : process.env.USER_ACCESS_TOKEN,
-
     });
 
     const refreshToken = generatetoken({
         payload: { id: user._id },
-        // signature: checkUser.role === roletypes.Admin ? process.env.SYSTEM_REFRESH_TOKEN : process.env.USER_REFRESH_TOKEN,
         expiresIn: "365d"
     });
 
-    return successresponse(res, "Done", 200, { access_Token, refreshToken })
+    return successresponse(res, "Done", 200, { access_Token, refreshToken });
 });
 
 

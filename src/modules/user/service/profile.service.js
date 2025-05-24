@@ -101,28 +101,23 @@ export const updatepassword = asyncHandelr(async (req, res, next) => {
 
 
 export const Getloginuseraccount = asyncHandelr(async (req, res, next) => {
-
     const user = await dbservice.findOne({
-
         model: Usermodel,
-        filter: {
+        filter: { _id: req.user._id }
+    });
 
-            _id: req.user._id
-        }
-    })
     if (!user) {
-
-        return next(new Error("user not found in system ", { cause: 404 }))
+        return next(new Error("User not found in system", { cause: 404 }));
     }
 
-    const decryptphone = decryptData( user.mobileNumber, process.env.CRYPTO_SECRET_KEY)
-    return successresponse(res, {
+    return successresponse(res, "User fetched successfully", 200, {
         username: user.username,
         email: user.email,
-        gender: user.gender,
-        DOB: user.DOB,
-        mobileNumber: decryptphone, })
-})
+        userId: user.userId,
+        profilePic: user.profilePic?.secure_url || null, // يرجع رابط الصورة أو null لو مش موجودة
+    });
+});
+
 
 
 export const Getprofiledata = asyncHandelr(async (req, res, next) => {
@@ -150,6 +145,28 @@ export const Getprofiledata = asyncHandelr(async (req, res, next) => {
     })
 })
 
+export const updateUsername = asyncHandelr(async (req, res, next) => {
+    const { username } = req.body;
+
+    if (!username || username.trim() === "") {
+        return next(new Error("Username is required", { cause: 400 }));
+    }
+
+    const user = await dbservice.findOneAndUpdate({
+        model: Usermodel,
+        filter: { _id: req.user._id },
+        data: { username },
+        options: { new: true } // يرجع البيانات بعد التعديل
+    });
+
+    if (!user) {
+        return next(new Error("User not found", { cause: 404 }));
+    }
+
+    return successresponse(res, "Username updated successfully", 200, {
+        username: user.username
+    });
+});
 
 
 
@@ -163,34 +180,40 @@ export const Getprofiledata = asyncHandelr(async (req, res, next) => {
 
 
 export const updateimage = asyncHandelr(async (req, res, next) => {
+    // ارفع الصورة الجديدة على Cloudinary
+    const { secure_url, public_id } = await cloud.uploader.upload(req.file.path, {
+        folder: `user/${req.user._id}`
+    });
 
-    const { secure_url, public_id } = await cloud.uploader.upload(req.file.path, { folder: `user/${req.user._id}` })
-    const user = await dbservice.findOneAndUpdate({
-
+    // جلب بيانات المستخدم الحالية
+    const user = await dbservice.findOne({
         model: Usermodel,
-        filter: {
-            _id: req.user._id,
+        filter: { _id: req.user._id },
+    });
 
-        },
-        data: {
-
-            profilePic: { secure_url, public_id }
-        },
-        options: {
-            new: false,
+    // حذف الصورة القديمة إن وجدت
+    if (user?.profilePic?.public_id) {
+        try {
+            await cloud.uploader.destroy(user.profilePic.public_id);
+        } catch (err) {
+            console.error("خطأ في حذف الصورة القديمة:", err.message);
         }
-    })
-
-    if (user.profilePic?.secure_url) {
-        await cloud.uploader.destroy(user.profilePic.public_id)
-
     }
-    return successresponse(res, "user updated sucsess", 200, {
-        file: req.file,
-        user
 
+    // تحديث المستخدم بالصورة الجديدة
+    const updatedUser = await dbservice.findOneAndUpdate({
+        model: Usermodel,
+        filter: { _id: req.user._id },
+        data: { profilePic: { secure_url, public_id } },
+        options: { new: true },
+    });
+
+    return successresponse(res, "تم تحديث صورة المستخدم بنجاح", 200, {
+        // file: req.file,
+        // user: updatedUser,
     });
 });
+
 
 export const coverimages = asyncHandelr(async (req, res, next) => {
 
@@ -280,31 +303,3 @@ export const deleteCoverImage = asyncHandelr(async (req, res, next) => {
 });
 
 
-// import nodemailer from "nodemailer";
-
-// const transporter = nodemailer.createTransport({
-//     host: "smtp.mailersend.net",
-//     port: 2525, // أو جرب 2525 لو 587 مش شغال
-//     secure: false,
-//     auth: {
-//         user: "MS_KzFRCI@megabox.live", // SMTP Username
-//         pass: "mssp.WhhcR90.351ndgwmxj5lzqx8.6Vbwyb", // SMTP Password
-//     },
-// });
-
-// const sendEmail = async () => {
-//     try {
-//         const info = await transporter.sendMail({
-//             from: `"YallaBina" <MS_KzFRCI@megabox.live>`, // 🟢 استخدم نفس الـ SMTP user هنا للتجربة المبدئية
-//             to: "wevaacademy853@gmail.com",
-//             subject: "📧 اختبار إرسال من MailerSend",
-//             html: "<h2>✅ تم إرسال هذا الإيميل بنجاح عبر MailerSend SMTP 🚀</h2>",
-//         });
-
-//         console.log("✅ الإيميل تم إرساله:", info.messageId);
-//     } catch (error) {
-//         console.error("❌ فشل الإرسال:", error.message);
-//     }
-// };
-
-// sendEmail();
