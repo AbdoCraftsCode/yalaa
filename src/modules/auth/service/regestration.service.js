@@ -116,7 +116,7 @@ export const createFile = async (req, res) => {
         });
     }
   };
-// src/controllers/file.controller.js
+
 export const getUserFiles = async (req, res) => {
     try {
         const userId = req.user._id;
@@ -182,7 +182,7 @@ export const shareFile = async (req, res) => {
     }
   };
 
-// في نفس controller أو ملف منفصل
+
 export const getSharedFile = async (req, res) => {
     try {
         const { uniqueId } = req.params;
@@ -205,6 +205,28 @@ export const getSharedFile = async (req, res) => {
     }
 };
   
+export const getUserStorageUsage = async (req, res) => {
+    try {
+        const userId = req.user._id;
+
+        // نجمع الحجم الكلي لجميع الملفات المرفوعة من هذا المستخدم
+        const files = await File.find({ userId });
+
+        const totalUsedMB = files.reduce((sum, file) => sum + (file.fileSize || 0), 0);
+
+        res.status(200).json({
+            message: "✅ تم حساب المساحة المستخدمة",
+            totalFiles: files.length,
+            totalUsedMB,
+            totalUsedGB: (totalUsedMB / 1024).toFixed(3),
+
+        });
+
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ message: "❌ خطأ أثناء حساب المساحة", error: err.message });
+    }
+};
 
 
 

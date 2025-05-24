@@ -34,7 +34,7 @@ const userSchema = new mongoose.Schema(
         deletedAt: { type: Date },
         bannedAt: { type: Date },
         isBanned: { type: Boolean, default: false },
-        isOnline: { type: Boolean, default: false },
+        isBrimume: { type: Boolean, default: false },
         updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
         changecredintialTime: { type: Date },
         isBusy: { type: Boolean, default: false },
@@ -48,6 +48,7 @@ const userSchema = new mongoose.Schema(
             type: mongoose.Schema.Types.ObjectId,
             ref: "Class"
         },
+     
         profilePic: {
             secure_url: { type: String, }, // الصورة مطلوبة
             public_id: { type: String, }   // مهم لحذف الصور من Cloudinary
