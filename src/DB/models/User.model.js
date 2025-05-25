@@ -39,7 +39,7 @@ const userSchema = new mongoose.Schema(
         changecredintialTime: { type: Date },
         isBusy: { type: Boolean, default: false },
         isSearching: { type: Boolean, default: false },
-    
+        fcmToken: { type: String, default: null },
         image: {
             type: mongoose.Schema.Types.ObjectId,
             ref: "Image"

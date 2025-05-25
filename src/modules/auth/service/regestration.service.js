@@ -12,7 +12,7 @@ import { ClassModel } from "../../../DB/models/Company.model.js";
 import { QuestionModel } from "../../../DB/models/question.model.js";
 import { SubjectModel } from "../../../DB/models/supject.model.js";
 import { RankModel } from "../../../DB/models/rank.model.js";
-import { PointModel } from "../../../DB/models/points.model.js";
+// import { PointModel } from "../../../DB/models/points.model.js";
 import { AnswerModel } from "../../../DB/models/anser.model.js";
 import { nanoid } from 'nanoid';
 import bcrypt from "bcrypt"

@@ -1,8 +1,10 @@
 import mongoose from "mongoose";
 
-const pointSchema = new mongoose.Schema({
-    user: { type: mongoose.Types.ObjectId, ref: "User", required: true, unique: true },
-    totalPoints: { type: Number, default: 0 }
+const notificationSchema = new mongoose.Schema({
+    user: { type: mongoose.Types.ObjectId, ref: "User", default: null },
+    title: { type: String, required: true },
+    body: { type: String, required: true },
+    isRead: { type: Boolean, default: false }
 }, { timestamps: true });
 
-export const PointModel = mongoose.model("Point", pointSchema);
+export const NotificationModel = mongoose.model("Notification", notificationSchema);

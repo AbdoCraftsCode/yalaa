@@ -7,8 +7,9 @@ import cloud from "../../../utlis/multer/cloudinary.js";
 import { Folder } from "../../../DB/models/foldeer.model.js";
 import File from "../../../DB/models/files.conrroller.js";
 import fs from 'fs';
-
-
+import admin from 'firebase-admin';
+import serviceAccount from "../../user/service/notifications.service.json"with { type: 'json' };
+import { NotificationModel } from "../../../DB/models/points.model.js";
 
 export const Updateuseraccount = asyncHandelr(async (req, res, next) => {
     const {
@@ -487,4 +488,192 @@ export const deleteFolder = asyncHandelr(async (req, res) => {
     res.status(200).json({
         message: "✅ تم حذف المجلد وكل ما بداخله",
     });
+});
+
+
+
+
+admin.initializeApp({
+    credential: admin.credential.cert(serviceAccount),
+});
+
+// دالة إرسال إشعار
+async function sendNotification(deviceToken, title, body) {
+    const message = {
+        notification: { title, body },
+        token: deviceToken,
+    };
+
+    try {
+        const response = await admin.messaging().send(message);
+        console.log('✅ تم إرسال الإشعار:', response);
+    } catch (error) {
+        console.error('❌ فشل إرسال الإشعار:', error);
+    }
+}
+// يمكنك استبدال deviceToken بالرمز الفعلي للجهاز
+// sendNotification('cjgF4UMeR9q5oFJ_BUa6XH:APA91bGylmub7vmEdmn_hueoxCqgQLelhuNABZMR7h0A5H-mgqNSe3-RZYs9IJe0wZr8kzDwDvzaSJAH5o5bhr6m8cMe8jEGS9asTWYJLzK68pvnhtDJHco', 'عنوان الإشعار', 'نص الإشعار هنا');
+
+export const savetoken = asyncHandelr(async (req, res, next) => {
+    const { userId, fcmToken } = req.body;
+
+    if (!userId || !fcmToken) {
+        return res.status(400).json({ message: "userId و fcmToken مطلوبين" });
+    }
+
+    try {
+        await Usermodel.findByIdAndUpdate(userId, { fcmToken });
+        res.json({ message: "تم حفظ التوكن بنجاح" });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: "حدث خطأ أثناء حفظ التوكن" });
+    }
+
+});
+
+
+export const deleteFcmToken = asyncHandelr(async (req, res) => {
+    const userId = req.user._id;
+
+    try {
+        const user = await Usermodel.findById(userId);
+        if (!user) {
+            return res.status(404).json({ message: "❌ المستخدم غير موجود!" });
+        }
+
+        user.fcmToken = null; // 🧹 حذف التوكن
+        await user.save();
+
+        res.status(200).json({ message: "✅ تم حذف FCM Token بنجاح" });
+    } catch (error) {
+        console.error("❌ خطأ أثناء حذف التوكن:", error);
+        res.status(500).json({ message: "حدث خطأ أثناء حذف التوكن", error: error.message });
+    }
+});
+
+
+export const getAllUsers = asyncHandelr(async (req, res, next) => {
+    // ✅ جلب المستخدمين مع تصفية الـ role
+    const users = await Usermodel.find({ role: "User" })
+        .select("email username userId isBrimume ")
+        .lean(); // تحويل النتيجة إلى كائن عادي
+
+    const totalUsers = users.length;
+
+    const formattedUsers = users.map(user => ({
+        username: user.username,
+        userId: user.userId,
+        email: user.email,
+        id: user._id,
+        isBrimume: user.isBrimume,
+      
+    }));
+
+    return successresponse(res, {
+        message: "Users retrieved successfully",
+        totalUsers,
+        users: formattedUsers
+    });
+});
+
+
+export const sendnotification = asyncHandelr(async (req, res, next) => {
+    const { _id, title, body } = req.body;
+
+    if (!_id || !title || !body) {
+        return res.status(400).json({ message: "userId و title و body مطلوبين" });
+    }
+
+    try {
+        const user = await Usermodel.findById(_id);
+        if (!user || !user.fcmToken) {
+            return res.status(404).json({ message: "المستخدم غير موجود أو لا يحتوي على FCM Token" });
+        }
+
+        const message = {
+            notification: { title, body },
+            token: user.fcmToken,
+        };
+
+        await NotificationModel.create({ user: user._id, title, body });
+
+        const response = await admin.messaging().send(message);
+        console.log('✅ تم إرسال الإشعار:', response);
+
+        res.json({ message: "تم إرسال الإشعار بنجاح", response });
+    } catch (error) {
+        console.error('❌ فشل إرسال الإشعار:', error);
+        res.status(500).json({ message: "فشل إرسال الإشعار", error: error.message });
+    }
+
+});
+
+
+export const notifyall = asyncHandelr(async (req, res, next) => {
+    const { title, body } = req.body;
+
+    if (!title || !body) {
+        return res.status(400).json({ message: "العنوان والمحتوى مطلوبين" });
+    }
+
+    try {
+        const users = await Usermodel.find({ fcmToken: { $ne: null } });
+
+        let successCount = 0;
+        let failCount = 0;
+
+        for (let user of users) {
+            try {
+                // 1. إرسال الإشعار
+                await sendNotification(user.fcmToken, title, body);
+
+                // 2. تخزين الإشعار في قاعدة البيانات
+                await NotificationModel.create({
+                    user: user._id,
+                    title,
+                    body,
+                    isRead: false
+                });
+
+                successCount++;
+            } catch (e) {
+                console.error(`❌ فشل إرسال/تخزين إشعار للمستخدم ${user._id}:`, e.message);
+                failCount++;
+            }
+        }
+
+        return res.status(200).json({
+            message: "✅ تم تنفيذ إرسال وتخزين الإشعارات",
+            totalUsers: users.length,
+            successCount,
+            failCount
+        });
+    } catch (err) {
+        console.error(err);
+        return res.status(500).json({ message: "❌ حدث خطأ أثناء إرسال الإشعارات" });
+    }
+});
+
+export const getUserNotifications = asyncHandelr(async (req, res) => {
+    const userId = req.user._id; // تأكد إنك ممرر `auth middleware`
+
+    const notifications = await NotificationModel.find({ user: userId })
+        .sort({ createdAt: -1 }); // الأحدث أولًا
+
+    res.status(200).json({
+        message: "📬 تم جلب الإشعارات",
+        notifications
+    });
+});
+
+
+export const markAllAsRead = asyncHandelr(async (req, res) => {
+    const userId = req.user._id;
+
+    await NotificationModel.updateMany(
+        { user: userId, isRead: false },
+        { $set: { isRead: true } }
+    );
+
+    res.status(200).json({ message: "✅ تم تعليم كل الإشعارات كمقروءة" });
 });
