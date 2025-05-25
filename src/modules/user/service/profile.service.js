@@ -8,7 +8,7 @@ import { Folder } from "../../../DB/models/foldeer.model.js";
 import File from "../../../DB/models/files.conrroller.js";
 import fs from 'fs';
 import admin from 'firebase-admin';
-// import serviceAccount from "../../user/service/notifications.service.json"with { type: 'json' };
+
 import { NotificationModel } from "../../../DB/models/points.model.js";
 
 export const Updateuseraccount = asyncHandelr(async (req, res, next) => {
