@@ -115,6 +115,7 @@ export const Getloginuseraccount = asyncHandelr(async (req, res, next) => {
 
     return successresponse(res, "User fetched successfully", 200, {
         username: user.username,
+        _id: user._id,
         email: user.email,
         isBrimume: user.isBrimume,
         userId: user.userId,
