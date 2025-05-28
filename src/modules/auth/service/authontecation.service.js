@@ -30,14 +30,14 @@ export const login = asyncHandelr(async (req, res, next) => {
     }
 
     const access_Token = generatetoken({
-        payload: { id: checkUser._id },
-        // signature: checkUser.role === roletypes.Admin ? process.env.SYSTEM_ACCESS_TOKEN : process.env.USER_ACCESS_TOKEN,
+        payload: { id: checkUser._id, role: checkUser.role },
+
 
     });
 
     const refreshToken = generatetoken({
-        payload: { id: checkUser._id },
-        // signature: checkUser.role === roletypes.Admin ? process.env.SYSTEM_REFRESH_TOKEN : process.env.USER_REFRESH_TOKEN,
+        payload: { id: checkUser._id, role: checkUser.role },
+  
         expiresIn:"365d"
     });
 
