@@ -523,8 +523,8 @@ async function sendNotification(deviceToken, title, body) {
         console.error('❌ فشل إرسال الإشعار:', error);
     }
 }
-// يمكنك استبدال deviceToken بالرمز الفعلي للجهاز
-// sendNotification('cjgF4UMeR9q5oFJ_BUa6XH:APA91bGylmub7vmEdmn_hueoxCqgQLelhuNABZMR7h0A5H-mgqNSe3-RZYs9IJe0wZr8kzDwDvzaSJAH5o5bhr6m8cMe8jEGS9asTWYJLzK68pvnhtDJHco', 'عنوان الإشعار', 'نص الإشعار هنا');
+
+// sendNotification('eXz4VgAGQlOXVYLXT5As5M:APA91bFSqGnJa7BmqsfaSEEvjUvi6Y2IRpLGQ12-TZ0sQSL07eKmPVKdHvikiLOPpDjvv8bzD_2rN7V3eEveqE3ef6xJkbQuczadHMY2lvjnPSWMMbwIN_A', 'عنوان الإشعار', 'نص الإشعار هنا');
 
 export const savetoken = asyncHandelr(async (req, res, next) => {
     const { userId, fcmToken } = req.body;

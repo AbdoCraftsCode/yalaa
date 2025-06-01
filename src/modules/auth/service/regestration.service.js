@@ -19,7 +19,7 @@ import bcrypt from "bcrypt"
 import File from "../../../DB/models/files.conrroller.js";
 // import admin from 'firebase-admin';
 import fs from 'fs';
-
+import axios from 'axios';
 
 // export const signup = asyncHandelr(async (req, res, next) => {
     
@@ -150,6 +150,122 @@ export const getUserFiles = async (req, res) => {
     }
 };
 
+
+
+
+export const generateShareLink = async (req, res) => {
+    try {
+        const userId = req.user._id;
+        const { fileId } = req.body;
+
+        // التحقق من وجود معرف الملف
+        if (!fileId) {
+            return res.status(400).json({ message: '❌ يُرجى إرسال معرف الملف.' });
+        }
+
+        // التحقق من ملكية الملف
+        const file = await File.findOne({ _id: fileId, userId });
+
+        if (!file) {
+            return res.status(404).json({
+                message: '❌ الملف غير موجود أو لا تملك صلاحية الوصول إليه.',
+            });
+        }
+
+        // طلب إنشاء الرابط من Branch
+        const branchRes = await axios.post('https://api2.branch.io/v1/url', {
+            branch_key: process.env.BRANCH_KEY,
+            campaign: 'file_share',
+            feature: 'sharing',
+            channel: 'in_app',
+            data: {
+                "$deeplink_path": `shared/${fileId}`,
+                "file_id": fileId,
+                "shared_by": userId,
+                "$android_url": "https://www.terabox.com//app.apk",
+                "$fallback_url": "https://www.terabox.com/",
+                "$desktop_url": "https://www.terabox.com/",
+                "$og_title": "📁 مشاركة ملف",
+                "$og_description": "تمت مشاركة هذا الملف معك",
+                "$og_image_url": "https://www.terabox.com//share-image.png"
+            }
+        });
+
+        const shareLink = branchRes.data?.url;
+
+        if (!shareLink) {
+            return res.status(500).json({ message: '❌ لم يتم استلام رابط المشاركة من Branch.' });
+        }
+
+        // تحديث الملف
+        file.shared = true;
+        file.sharedUrl = shareLink;
+        await file.save();
+
+        return res.status(200).json({
+            message: "✅ تم إنشاء رابط المشاركة بنجاح",
+            shareUrl: shareLink,
+        });
+
+    } catch (err) {
+        console.error("Error generating share link:", err);
+        return res.status(500).json({
+            message: "❌ حدث خطأ أثناء إنشاء رابط المشاركة",
+            error: err?.response?.data || err.message,
+        });
+    }
+};
+
+
+
+// عرض محتوى الملف من خلال الرابط المشترك
+export const getSharedFile = async (req, res) => {
+    try {
+        const { fileId } = req.params;
+
+        if (!fileId) {
+            return res.status(400).json({ message: "❌ يجب إرسال معرف الملف." });
+        }
+
+        const file = await File.findById(fileId).populate("userId", "username email");
+
+        if (!file || !file.shared) {
+            return res.status(404).json({ message: "❌ الملف غير موجود أو لم يتم مشاركته." });
+        }
+
+        return res.status(200).json({
+            message: "✅ تم جلب الملف بنجاح",
+            file: {
+                id: file._id,
+                name: file.fileName,
+                type: file.fileSize,
+                size: file.fileSize,
+                url: file.url,
+                sharedBy: {
+                    username: file.userId.username,
+                    email: file.userId.email,
+                },
+                createdAt: file.createdAt,
+            }
+        });
+    } catch (err) {
+        console.error("Error in getSharedFile:", err);
+        return res.status(500).json({ message: "❌ حدث خطأ أثناء جلب الملف", error: err.message });
+    }
+};
+
+
+// axios.post('https://api2.branch.io/v1/url', {
+//     branch_key: 'key_test_asCmg1x2BDyHh3GHNcEzofihqvepEG95',
+//     data: {
+//         "$deeplink_path": "shared/683c27333577316ffd99166d",
+//         "$fallback_url": "https://www.google.com"
+//     }
+// }).then(res => {
+//     console.log(res.data.url);
+// });
+  
+
 export const shareFile = async (req, res) => {
     try {
         const fileId = req.params.id;
@@ -183,27 +299,27 @@ export const shareFile = async (req, res) => {
   };
 
 
-export const getSharedFile = async (req, res) => {
-    try {
-        const { uniqueId } = req.params;
-        const fullUrl = `https://yourapp.com/shared/${uniqueId}`;
+// export const getSharedFile = async (req, res) => {
+//     try {
+//         const { uniqueId } = req.params;
+//         const fullUrl = `https://yourapp.com/shared/${uniqueId}`;
 
-        const file = await File.findOne({ shared: true, sharedUrl: fullUrl });
+//         const file = await File.findOne({ shared: true, sharedUrl: fullUrl });
 
-        if (!file) {
-            return res.status(404).json({ message: '❌ الملف غير موجود أو لم تتم مشاركته' });
-        }
+//         if (!file) {
+//             return res.status(404).json({ message: '❌ الملف غير موجود أو لم تتم مشاركته' });
+//         }
 
-        res.status(200).json({
-            fileName: file.fileName,
-            fileType: file.fileType,
-            url: file.url,
-            createdAt: file.createdAt,
-        });
-    } catch (err) {
-        res.status(500).json({ message: '❌ خطأ في الوصول للملف المشترك', error: err.message });
-    }
-};
+//         res.status(200).json({
+//             fileName: file.fileName,
+//             fileType: file.fileType,
+//             url: file.url,
+//             createdAt: file.createdAt,
+//         });
+//     } catch (err) {
+//         res.status(500).json({ message: '❌ خطأ في الوصول للملف المشترك', error: err.message });
+//     }
+// };
   
 export const getUserStorageUsage = async (req, res) => {
     try {
