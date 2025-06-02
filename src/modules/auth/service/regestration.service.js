@@ -182,12 +182,12 @@ export const generateShareLink = async (req, res) => {
                 "$deeplink_path": `shared/${fileId}`,
                 "file_id": fileId,
                 "shared_by": userId,
-                "$android_url": "https://www.terabox.com/",
-                "$fallback_url": "https://www.terabox.com/",
-                "$desktop_url": "https://www.terabox.com/",
+                "$android_url": "https://fjrqr4-3000.csb.app/",
+                "$fallback_url": "https://fjrqr4-3000.csb.app/",
+                "$desktop_url": "https://fjrqr4-3000.csb.app/",
                 "$og_title": "📁 مشاركة ملف",
                 "$og_description": "تمت مشاركة هذا الملف معك",
-                "$og_image_url": "https://www.terabox.com///share-image.png"
+                "$og_image_url": "https://fjrqr4-3000.csb.app////share-image.png"
             }
         });
 
