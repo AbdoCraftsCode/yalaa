@@ -20,6 +20,7 @@ import File from "../../../DB/models/files.conrroller.js";
 // import admin from 'firebase-admin';
 import fs from 'fs';
 import axios from 'axios';
+import { FileShareAnalytics } from "../../../DB/models/analises.model.js";
 
 // export const signup = asyncHandelr(async (req, res, next) => {
     
@@ -255,6 +256,134 @@ export const getSharedFile = async (req, res) => {
     } catch (err) {
         console.error("Error in getSharedFile:", err);
         return res.status(500).json({ message: "❌ حدث خطأ أثناء جلب الملف", error: err.message });
+    }
+};
+
+
+export const incrementFileView = async (req, res, next) => {
+    try {
+        const { fileId } = req.params; // استخدام req.params بدلاً من req.body
+
+        if (!fileId) {
+            return res.status(400).json({ message: '❌ يجب إرسال معرف الملف.' });
+        }
+
+        await FileShareAnalytics.findOneAndUpdate(
+            { fileId },
+            {
+                $inc: { views: 1 },
+                $set: { lastUpdated: new Date() }
+            },
+            { upsert: true, new: true }
+        );
+
+        next();
+    } catch (err) {
+        console.error('Error in incrementFileView:', err);
+        return res.status(500).json({
+            message: '❌ حدث خطأ أثناء تسجيل المشاهدة',
+            error: err.message,
+        });
+    }
+};
+
+export const getShareLinkAnalytics = async (req, res) => {
+    try {
+        const userId = req.user._id; // جلب معرف المستخدم من التوثيق
+
+        // جلب كل الملفات المشتركة الخاصة بالمستخدم مع تفاصيل إضافية
+        const files = await File.find({ userId, shared: true }).select('_id fileName sharedUrl');
+
+        if (!files || files.length === 0) {
+            return res.status(404).json({
+                message: '❌ لا توجد ملفات مشتركة لهذا المستخدم.',
+                analytics: [],
+            });
+        }
+
+        // استخراج معرفات الملفات
+        const fileIds = files.map(file => file._id);
+
+        // جلب بيانات التحليلات لكل الملفات
+        const analytics = await FileShareAnalytics.find({ fileId: { $in: fileIds } }).select('fileId downloads views lastUpdated');
+
+        // إنشاء قائمة التحليلات مع تفاصيل الملف
+        const userAnalytics = files.map(file => {
+            const analytic = analytics.find(a => a.fileId.toString() === file._id.toString());
+            return {
+                fileId: file._id,
+                fileName: file.fileName,
+                sharedUrl: file.sharedUrl,
+                downloads: analytic ? analytic.downloads : 0,
+                views: analytic ? analytic.views : 0,
+                lastUpdated: analytic ? analytic.lastUpdated : null,
+            };
+        });
+
+        return res.status(200).json({
+            message: '✅ تم جلب بيانات التحليلات بنجاح',
+            analytics: userAnalytics,
+        });
+    } catch (err) {
+        console.error('Error in getShareLinkAnalytics:', err);
+        return res.status(500).json({
+            message: '❌ حدث خطأ أثناء جلب بيانات التحليلات',
+            error: err.message,
+        });
+    }
+};
+
+export const getUserAnalytics = async (req, res) => {
+    try {
+        const userId = req.user._id; // جلب معرف المستخدم من التوثيق
+
+        // جلب كل الملفات المشتركة الخاصة بالمستخدم
+        const files = await File.find({ userId, shared: true }).select('_id');
+
+        if (!files || files.length === 0) {
+            return res.status(404).json({
+                message: '❌ لا توجد ملفات مشتركة لهذا المستخدم.',
+                totalAnalytics: {
+                    totalDownloads: 0,
+                    totalViews: 0
+                }
+            });
+        }
+
+        // استخراج معرفات الملفات
+        const fileIds = files.map(file => file._id);
+
+        // جلب بيانات التحليلات وتجميع المشاهدات والتحميلات
+        const analytics = await FileShareAnalytics.aggregate([
+            { $match: { fileId: { $in: fileIds } } },
+            {
+                $group: {
+                    _id: null,
+                    totalDownloads: { $sum: '$downloads' },
+                    totalViews: { $sum: '$views' }
+                }
+            }
+        ]);
+
+        // تحضير الرد
+        const totalAnalytics = analytics.length > 0 ? {
+            totalDownloads: analytics[0].totalDownloads || 0,
+            totalViews: analytics[0].totalViews || 0
+        } : {
+            totalDownloads: 0,
+            totalViews: 0
+        };
+
+        return res.status(200).json({
+            message: '✅ تم جلب إجمالي بيانات التحليلات بنجاح',
+            totalAnalytics
+        });
+    } catch (err) {
+        console.error('Error in getUserTotalAnalytics:', err);
+        return res.status(500).json({
+            message: '❌ حدث خطأ أثناء جلب إجمالي بيانات التحليلات',
+            error: err.message
+        });
     }
 };
 
