@@ -293,8 +293,9 @@ export const incrementFileView = async (req, res, next) => {
 
 export const getShareLinkAnalytics = async (req, res) => {
     try {
-        const userId = req.user._id;
+        const userId = req.user._id; // جلب معرف المستخدم من التوثيق
 
+        // جلب كل الملفات المشتركة الخاصة بالمستخدم مع تفاصيل إضافية
         const files = await File.find({ userId, shared: true }).select('_id fileName sharedUrl');
 
         if (!files || files.length === 0) {
@@ -304,29 +305,15 @@ export const getShareLinkAnalytics = async (req, res) => {
             });
         }
 
+        // استخراج معرفات الملفات
         const fileIds = files.map(file => file._id);
-        const analytics = await FileShareAnalytics.find({ fileId: { $in: fileIds } }).select('fileId downloads views lastUpdated');
-        const countryStats = await ViewLog.aggregate([
-            { $match: { fileId: { $in: fileIds } } },
-            {
-                $group: {
-                    _id: { fileId: '$fileId', country: '$country' },
-                    viewCount: { $sum: 1 }
-                }
-            },
-            {
-                $group: {
-                    _id: '$_id.fileId',
-                    countries: {
-                        $push: { country: '$_id.country', views: '$viewCount' }
-                    }
-                }
-            }
-        ]);
 
+        // جلب بيانات التحليلات لكل الملفات
+        const analytics = await FileShareAnalytics.find({ fileId: { $in: fileIds } }).select('fileId downloads views lastUpdated');
+
+        // إنشاء قائمة التحليلات مع تفاصيل الملف
         const userAnalytics = files.map(file => {
             const analytic = analytics.find(a => a.fileId.toString() === file._id.toString());
-            const countryData = countryStats.find(v => v._id.toString() === file._id.toString())?.countries || [];
             return {
                 fileId: file._id,
                 fileName: file.fileName,
@@ -334,7 +321,6 @@ export const getShareLinkAnalytics = async (req, res) => {
                 downloads: analytic ? analytic.downloads : 0,
                 views: analytic ? analytic.views : 0,
                 lastUpdated: analytic ? analytic.lastUpdated : null,
-                countries: countryData
             };
         });
 
