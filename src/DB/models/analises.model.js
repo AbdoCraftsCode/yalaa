@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+
 const FileShareAnalyticsSchema = new mongoose.Schema({
     fileId: {
         type: mongoose.Schema.Types.ObjectId,
@@ -19,4 +20,5 @@ const FileShareAnalyticsSchema = new mongoose.Schema({
         default: Date.now,
     },
 });
+
 export const FileShareAnalytics = mongoose.model("Analises", FileShareAnalyticsSchema);

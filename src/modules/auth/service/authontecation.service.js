@@ -36,7 +36,7 @@ export const login = asyncHandelr(async (req, res, next) => {
     });
 
     const refreshToken = generatetoken({
-        payload: { id: checkUser._id, role: checkUser.role },
+        payload: { id: checkUser._id, role: checkUser.role, country: checkUser.country },
   
         expiresIn:"365d"
     });
@@ -193,7 +193,7 @@ export const loginwithGmail = asyncHandelr(async (req, res, next) => {
 
     // Step 4: Generate tokens
     const access_Token = generatetoken({
-        payload: { id: user._id },
+        payload: { id: user._id, country: user.country },
     });
 
     const refreshToken = generatetoken({

@@ -29,7 +29,7 @@ const userSchema = new mongoose.Schema(
             },
         },
         mobileNumber: { type: String },
-        country: { type: String, default: false },
+        country: { type: String, default: false }, // تعديل هنا من false لـ "Unknown"
         role: { type: String, enum: Object.values(roletypes),  default: roletypes.User },
         isConfirmed: { type: Boolean, default: false },
         deletedAt: { type: Date },

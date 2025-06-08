@@ -21,7 +21,9 @@ import File from "../../../DB/models/files.conrroller.js";
 import fs from 'fs';
 import axios from 'axios';
 import { FileShareAnalytics } from "../../../DB/models/analises.model.js";
-
+import { ViewLog } from "../../../DB/models/views.model.js";
+import mongoose from "mongoose";
+import geoip from 'geoip-lite';
 // export const signup = asyncHandelr(async (req, res, next) => {
     
 //     const { username, email, confirmationpassword, DOB, password, mobileNumber } = req.body
@@ -223,7 +225,7 @@ export const generateShareLink = async (req, res) => {
 
 
 
-// عرض محتوى الملف من خلال الرابط المشترك
+
 export const getSharedFile = async (req, res) => {
     try {
         const { fileId } = req.params;
@@ -260,38 +262,40 @@ export const getSharedFile = async (req, res) => {
 };
 
 
-export const incrementFileView = async (req, res, next) => {
+export const incrementFileView = async (req, res) => {
     try {
-        const { fileId } = req.params; // استخدام req.params بدلاً من req.body
+        const fileId = req.params.fileId;
 
-        if (!fileId) {
-            return res.status(400).json({ message: '❌ يجب إرسال معرف الملف.' });
-        }
+        // ✅ تحديد الدولة من IP
+        const ip = req.headers['x-forwarded-for'] || req.connection.remoteAddress;
+        const geo = geoip.lookup(ip);
+        const country = geo?.country || 'Unknown';
 
+        // ✅ سجل المشاهدة في log
+        await ViewLog.create({ fileId, country });
+
+        // ✅ زود عدد المشاهدات في التحليلات العامة
         await FileShareAnalytics.findOneAndUpdate(
             { fileId },
             {
                 $inc: { views: 1 },
-                $set: { lastUpdated: new Date() }
+                lastUpdated: new Date()
             },
-            { upsert: true, new: true }
+            { upsert: true }
         );
 
-        next();
+        res.status(200).json({ message: '✅ تم تسجيل المشاهدة' });
+
     } catch (err) {
         console.error('Error in incrementFileView:', err);
-        return res.status(500).json({
-            message: '❌ حدث خطأ أثناء تسجيل المشاهدة',
-            error: err.message,
-        });
+        res.status(500).json({ message: '❌ خطأ أثناء تسجيل المشاهدة' });
     }
 };
 
 export const getShareLinkAnalytics = async (req, res) => {
     try {
-        const userId = req.user._id; // جلب معرف المستخدم من التوثيق
+        const userId = req.user._id;
 
-        // جلب كل الملفات المشتركة الخاصة بالمستخدم مع تفاصيل إضافية
         const files = await File.find({ userId, shared: true }).select('_id fileName sharedUrl');
 
         if (!files || files.length === 0) {
@@ -301,13 +305,32 @@ export const getShareLinkAnalytics = async (req, res) => {
             });
         }
 
-        // استخراج معرفات الملفات
         const fileIds = files.map(file => file._id);
 
-        // جلب بيانات التحليلات لكل الملفات
-        const analytics = await FileShareAnalytics.find({ fileId: { $in: fileIds } }).select('fileId downloads views lastUpdated');
+        const analytics = await FileShareAnalytics.find({ fileId: { $in: fileIds } })
+            .select('fileId downloads views lastUpdated');
 
-        // إنشاء قائمة التحليلات مع تفاصيل الملف
+        // ✅ تجميع عدد المشاهدات حسب الدولة
+        const viewsByCountry = await ViewLog.aggregate([
+            { $match: { fileId: { $in: fileIds } } },
+            {
+                $group: {
+                    _id: { fileId: "$fileId", country: "$country" },
+                    count: { $sum: 1 }
+                }
+            }
+        ]);
+
+        const countryMap = {};
+        viewsByCountry.forEach(entry => {
+            const id = entry._id.fileId.toString();
+            if (!countryMap[id]) countryMap[id] = [];
+            countryMap[id].push({
+                country: entry._id.country,
+                views: entry.count
+            });
+        });
+
         const userAnalytics = files.map(file => {
             const analytic = analytics.find(a => a.fileId.toString() === file._id.toString());
             return {
@@ -317,6 +340,7 @@ export const getShareLinkAnalytics = async (req, res) => {
                 downloads: analytic ? analytic.downloads : 0,
                 views: analytic ? analytic.views : 0,
                 lastUpdated: analytic ? analytic.lastUpdated : null,
+                viewsByCountry: countryMap[file._id.toString()] || []
             };
         });
 
@@ -332,6 +356,7 @@ export const getShareLinkAnalytics = async (req, res) => {
         });
     }
 };
+
 
 export const getUserAnalytics = async (req, res) => {
     try {
@@ -386,6 +411,12 @@ export const getUserAnalytics = async (req, res) => {
         });
     }
 };
+
+
+
+
+
+
 
 
 // axios.post('https://api2.branch.io/v1/url', {

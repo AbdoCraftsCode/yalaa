@@ -1,4 +1,3 @@
-// src/models/file.model.js
 import mongoose from 'mongoose';
 
 const fileSchema = new mongoose.Schema({
@@ -39,7 +38,6 @@ const fileSchema = new mongoose.Schema({
         default: Date.now,
     },
 });
-
 
 const File = mongoose.model("File", fileSchema);
 export default File;
