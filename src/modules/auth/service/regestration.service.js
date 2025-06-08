@@ -239,28 +239,27 @@ export const getSharedFile = async (req, res) => {
             return res.status(404).json({ message: "❌ الملف غير موجود أو لم يتم مشاركته." });
         }
 
-        await incrementFileView(req, res, () => {
-            res.status(200).json({
-                message: "✅ تم جلب الملف بنجاح",
-                file: {
-                    id: file._id,
-                    name: file.fileName,
-                    type: file.fileType,
-                    size: file.fileSize,
-                    url: file.url,
-                    sharedBy: {
-                        username: file.userId.username,
-                        email: file.userId.email,
-                    },
-                    createdAt: file.createdAt,
-                }
-            });
+        return res.status(200).json({
+            message: "✅ تم جلب الملف بنجاح",
+            file: {
+                id: file._id,
+                name: file.fileName,
+                type: file.fileSize,
+                size: file.fileSize,
+                url: file.url,
+                sharedBy: {
+                    username: file.userId.username,
+                    email: file.userId.email,
+                },
+                createdAt: file.createdAt,
+            }
         });
     } catch (err) {
         console.error("Error in getSharedFile:", err);
         return res.status(500).json({ message: "❌ حدث خطأ أثناء جلب الملف", error: err.message });
     }
 };
+
 
 
 export const incrementFileView = async (req, res, next) => {
@@ -289,7 +288,6 @@ export const incrementFileView = async (req, res, next) => {
         });
     }
 };
-
 
 export const getShareLinkAnalytics = async (req, res) => {
     try {
