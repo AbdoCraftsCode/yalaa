@@ -23,6 +23,8 @@ import axios from 'axios';
 import { FileShareAnalytics } from "../../../DB/models/analises.model.js";
 import { ViewLog } from "../../../DB/models/views.model.js";
 import mongoose from "mongoose";
+import geoip from 'geoip-lite';
+
 // export const signup = asyncHandelr(async (req, res, next) => {
     
 //     const { username, email, confirmationpassword, DOB, password, mobileNumber } = req.body
@@ -239,12 +241,46 @@ export const getSharedFile = async (req, res) => {
             return res.status(404).json({ message: "❌ الملف غير موجود أو لم يتم مشاركته." });
         }
 
+        // الحصول على IP العميل (في حالة استخدام Proxy تأكد من ضبط Header)
+        const ip = req.headers['x-forwarded-for'] || req.connection.remoteAddress || req.socket.remoteAddress;
+        const geo = geoip.lookup(ip);
+        const country = geo?.country || 'Unknown';
+
+        // تحديث عدد المشاهدات العام وتاريخ آخر مشاهدة
+        await FileShareAnalytics.findOneAndUpdate(
+            { fileId },
+            {
+                $inc: { views: 1 },
+                $set: { lastUpdated: new Date() },
+                $setOnInsert: { downloads: 0 }
+            },
+            { upsert: true }
+        );
+
+        // تحديث أو زيادة عدد المشاهدات حسب الدولة
+        const updateResult = await FileShareAnalytics.updateOne(
+            { fileId, "viewers.country": country },
+            {
+                $inc: { "viewers.$.views": 1 }
+            }
+        );
+
+        // إذا لم يتم تحديث أي سجل، يعني الدولة جديدة، نضيفها
+        if (updateResult.matchedCount === 0) {
+            await FileShareAnalytics.updateOne(
+                { fileId },
+                {
+                    $push: { viewers: { country, views: 1 } }
+                }
+            );
+        }
+
         return res.status(200).json({
             message: "✅ تم جلب الملف بنجاح",
             file: {
                 id: file._id,
                 name: file.fileName,
-                type: file.fileSize,
+                type: file.fileType,   // صحح الحقل لو هو fileType مش fileSize
                 size: file.fileSize,
                 url: file.url,
                 sharedBy: {
@@ -254,12 +290,12 @@ export const getSharedFile = async (req, res) => {
                 createdAt: file.createdAt,
             }
         });
+
     } catch (err) {
         console.error("Error in getSharedFile:", err);
         return res.status(500).json({ message: "❌ حدث خطأ أثناء جلب الملف", error: err.message });
     }
-};
-
+  };
 
 
 export const incrementFileView = async (req, res, next) => {
@@ -291,9 +327,8 @@ export const incrementFileView = async (req, res, next) => {
 
 export const getShareLinkAnalytics = async (req, res) => {
     try {
-        const userId = req.user._id; // جلب معرف المستخدم من التوثيق
+        const userId = req.user._id;
 
-        // جلب كل الملفات المشتركة الخاصة بالمستخدم مع تفاصيل إضافية
         const files = await File.find({ userId, shared: true }).select('_id fileName sharedUrl');
 
         if (!files || files.length === 0) {
@@ -303,15 +338,23 @@ export const getShareLinkAnalytics = async (req, res) => {
             });
         }
 
-        // استخراج معرفات الملفات
         const fileIds = files.map(file => file._id);
 
-        // جلب بيانات التحليلات لكل الملفات
-        const analytics = await FileShareAnalytics.find({ fileId: { $in: fileIds } }).select('fileId downloads views lastUpdated');
+        const analytics = await FileShareAnalytics.find({ fileId: { $in: fileIds } })
+            .select('fileId downloads views lastUpdated viewers');
 
-        // إنشاء قائمة التحليلات مع تفاصيل الملف
         const userAnalytics = files.map(file => {
             const analytic = analytics.find(a => a.fileId.toString() === file._id.toString());
+
+            let viewsByCountry = [];
+
+            if (analytic?.viewers?.length > 0) {
+                viewsByCountry = analytic.viewers.map(viewer => ({
+                    country: viewer.country || 'Unknown',
+                    views: viewer.views || 1,
+                }));
+            }
+
             return {
                 fileId: file._id,
                 fileName: file.fileName,
@@ -319,6 +362,7 @@ export const getShareLinkAnalytics = async (req, res) => {
                 downloads: analytic ? analytic.downloads : 0,
                 views: analytic ? analytic.views : 0,
                 lastUpdated: analytic ? analytic.lastUpdated : null,
+                viewsByCountry
             };
         });
 
@@ -334,8 +378,7 @@ export const getShareLinkAnalytics = async (req, res) => {
         });
     }
 };
-
-
+  
 export const getUserAnalytics = async (req, res) => {
     try {
         const userId = req.user._id; // جلب معرف المستخدم من التوثيق

@@ -19,6 +19,13 @@ const FileShareAnalyticsSchema = new mongoose.Schema({
         type: Date,
         default: Date.now,
     },
+    viewers: [
+        {
+            country: { type: String },
+            views: { type: Number, default: 1 }
+        }
+    ]
+      
 });
 
 export const FileShareAnalytics = mongoose.model("Analises", FileShareAnalyticsSchema);
