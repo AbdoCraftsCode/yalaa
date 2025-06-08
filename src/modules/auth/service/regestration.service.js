@@ -23,7 +23,6 @@ import axios from 'axios';
 import { FileShareAnalytics } from "../../../DB/models/analises.model.js";
 import { ViewLog } from "../../../DB/models/views.model.js";
 import mongoose from "mongoose";
-import geoip from 'geoip-lite';
 // export const signup = asyncHandelr(async (req, res, next) => {
     
 //     const { username, email, confirmationpassword, DOB, password, mobileNumber } = req.body
@@ -225,7 +224,7 @@ export const generateShareLink = async (req, res) => {
 
 
 
-
+// عرض محتوى الملف من خلال الرابط المشترك
 export const getSharedFile = async (req, res) => {
     try {
         const { fileId } = req.params;
@@ -240,20 +239,22 @@ export const getSharedFile = async (req, res) => {
             return res.status(404).json({ message: "❌ الملف غير موجود أو لم يتم مشاركته." });
         }
 
-        return res.status(200).json({
-            message: "✅ تم جلب الملف بنجاح",
-            file: {
-                id: file._id,
-                name: file.fileName,
-                type: file.fileSize,
-                size: file.fileSize,
-                url: file.url,
-                sharedBy: {
-                    username: file.userId.username,
-                    email: file.userId.email,
-                },
-                createdAt: file.createdAt,
-            }
+        await incrementFileView(req, res, () => {
+            res.status(200).json({
+                message: "✅ تم جلب الملف بنجاح",
+                file: {
+                    id: file._id,
+                    name: file.fileName,
+                    type: file.fileType,
+                    size: file.fileSize,
+                    url: file.url,
+                    sharedBy: {
+                        username: file.userId.username,
+                        email: file.userId.email,
+                    },
+                    createdAt: file.createdAt,
+                }
+            });
         });
     } catch (err) {
         console.error("Error in getSharedFile:", err);
@@ -262,35 +263,33 @@ export const getSharedFile = async (req, res) => {
 };
 
 
-export const incrementFileView = async (req, res) => {
+export const incrementFileView = async (req, res, next) => {
     try {
-        const fileId = req.params.fileId;
+        const { fileId } = req.params; // استخدام req.params بدلاً من req.body
 
-        // ✅ تحديد الدولة من IP
-        const ip = req.headers['x-forwarded-for'] || req.connection.remoteAddress;
-        const geo = geoip.lookup(ip);
-        const country = geo?.country || 'Unknown';
+        if (!fileId) {
+            return res.status(400).json({ message: '❌ يجب إرسال معرف الملف.' });
+        }
 
-        // ✅ سجل المشاهدة في log
-        await ViewLog.create({ fileId, country });
-
-        // ✅ زود عدد المشاهدات في التحليلات العامة
         await FileShareAnalytics.findOneAndUpdate(
             { fileId },
             {
                 $inc: { views: 1 },
-                lastUpdated: new Date()
+                $set: { lastUpdated: new Date() }
             },
-            { upsert: true }
+            { upsert: true, new: true }
         );
 
-        res.status(200).json({ message: '✅ تم تسجيل المشاهدة' });
-
+        next();
     } catch (err) {
         console.error('Error in incrementFileView:', err);
-        res.status(500).json({ message: '❌ خطأ أثناء تسجيل المشاهدة' });
+        return res.status(500).json({
+            message: '❌ حدث خطأ أثناء تسجيل المشاهدة',
+            error: err.message,
+        });
     }
 };
+
 
 export const getShareLinkAnalytics = async (req, res) => {
     try {
@@ -306,33 +305,28 @@ export const getShareLinkAnalytics = async (req, res) => {
         }
 
         const fileIds = files.map(file => file._id);
-
-        const analytics = await FileShareAnalytics.find({ fileId: { $in: fileIds } })
-            .select('fileId downloads views lastUpdated');
-
-        // ✅ تجميع عدد المشاهدات حسب الدولة
-        const viewsByCountry = await ViewLog.aggregate([
+        const analytics = await FileShareAnalytics.find({ fileId: { $in: fileIds } }).select('fileId downloads views lastUpdated');
+        const countryStats = await ViewLog.aggregate([
             { $match: { fileId: { $in: fileIds } } },
             {
                 $group: {
-                    _id: { fileId: "$fileId", country: "$country" },
-                    count: { $sum: 1 }
+                    _id: { fileId: '$fileId', country: '$country' },
+                    viewCount: { $sum: 1 }
+                }
+            },
+            {
+                $group: {
+                    _id: '$_id.fileId',
+                    countries: {
+                        $push: { country: '$_id.country', views: '$viewCount' }
+                    }
                 }
             }
         ]);
 
-        const countryMap = {};
-        viewsByCountry.forEach(entry => {
-            const id = entry._id.fileId.toString();
-            if (!countryMap[id]) countryMap[id] = [];
-            countryMap[id].push({
-                country: entry._id.country,
-                views: entry.count
-            });
-        });
-
         const userAnalytics = files.map(file => {
             const analytic = analytics.find(a => a.fileId.toString() === file._id.toString());
+            const countryData = countryStats.find(v => v._id.toString() === file._id.toString())?.countries || [];
             return {
                 fileId: file._id,
                 fileName: file.fileName,
@@ -340,7 +334,7 @@ export const getShareLinkAnalytics = async (req, res) => {
                 downloads: analytic ? analytic.downloads : 0,
                 views: analytic ? analytic.views : 0,
                 lastUpdated: analytic ? analytic.lastUpdated : null,
-                viewsByCountry: countryMap[file._id.toString()] || []
+                countries: countryData
             };
         });
 
