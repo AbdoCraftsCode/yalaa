@@ -50,7 +50,7 @@ import { FileShareAnalytics } from "../../../DB/models/analises.model.js";
  
 //     Emailevent.emit("confirmemail", { email });
 
-//     return successresponse(res, "User created successfully", 201, { user });
+//   ى   return successresponse(res, "User created successfully", 201, { user });
 
 
 // })
@@ -519,6 +519,37 @@ export const signup = asyncHandelr(async (req, res, next) => {
 
     return successresponse(res, "User created successfully", 201, );
 });
+
+export const updateProfile = asyncHandelr(async (req, res, next) => {
+    const { country } = req.body;
+
+    // استخراج الـ userId من التوكن بعد التحقق (مثلاً من middleware)
+    const _id = req.user._id;
+
+    // التأكد أن المستخدم موجود
+    const user = await dbservice.findOne({ model: Usermodel, filter: { _id } });
+    if (!user) {
+        return next(new Error("User not found", { cause: 404 }));
+    }
+
+    // تحديث البيانات المطلوبة فقط
+    const updatedUser = await dbservice.updateOne({
+        model: Usermodel,
+        filter: { _id },
+        data: {
+            ...(country && { country }),
+         
+        },
+        options: { new: true }, // لإرجاع البيانات بعد التعديل
+    });
+
+    return successresponse(res, "User profile updated successfully", 200);
+});
+
+
+
+
+
 
 export const getUserRoleById = asyncHandelr(async (req, res, next) => {
     const { _id } = req.params;
