@@ -250,7 +250,8 @@ export const getSharedFile = async (req, res) => {
 
         const geo = geoip.lookup(ip);
         const countryCode = geo?.country || 'Unknown';
-        const country = getName(countryCode) || countryCode;
+        const country = countryCode;
+
 
         // التأكد من وجود السجل الأساسي
         const existingDoc = await FileShareAnalytics.findOne({ fileId });
