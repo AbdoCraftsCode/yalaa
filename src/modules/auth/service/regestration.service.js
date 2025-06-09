@@ -24,7 +24,7 @@ import { FileShareAnalytics } from "../../../DB/models/analises.model.js";
 import { ViewLog } from "../../../DB/models/views.model.js";
 import mongoose from "mongoose";
 import geoip from 'geoip-lite';
-
+import { getName } from 'country-list';
 // export const signup = asyncHandelr(async (req, res, next) => {
     
 //     const { username, email, confirmationpassword, DOB, password, mobileNumber } = req.body
@@ -226,7 +226,7 @@ export const generateShareLink = async (req, res) => {
 
 
 
-// عرض محتوى الملف من خلال الرابط المشترك
+
 export const getSharedFile = async (req, res) => {
     try {
         const { fileId } = req.params;
@@ -241,38 +241,55 @@ export const getSharedFile = async (req, res) => {
             return res.status(404).json({ message: "❌ الملف غير موجود أو لم يتم مشاركته." });
         }
 
-        // الحصول على IP العميل (في حالة استخدام Proxy تأكد من ضبط Header)
-        const ip = req.headers['x-forwarded-for'] || req.connection.remoteAddress || req.socket.remoteAddress;
+        // الحصول على IP العميل
+        const ip =
+            req.headers['x-forwarded-for'] ||
+            req.connection?.remoteAddress ||
+            req.socket?.remoteAddress ||
+            '0.0.0.0';
+
         const geo = geoip.lookup(ip);
-        const country = geo?.country || 'Unknown';
+        const countryCode = geo?.country || 'Unknown';
+        const country = getName(countryCode) || countryCode;
 
-        // تحديث عدد المشاهدات العام وتاريخ آخر مشاهدة
-        await FileShareAnalytics.findOneAndUpdate(
-            { fileId },
-            {
-                $inc: { views: 1 },
-                $set: { lastUpdated: new Date() },
-                $setOnInsert: { downloads: 0 }
-            },
-            { upsert: true }
-        );
+        // التأكد من وجود السجل الأساسي
+        const existingDoc = await FileShareAnalytics.findOne({ fileId });
 
-        // تحديث أو زيادة عدد المشاهدات حسب الدولة
-        const updateResult = await FileShareAnalytics.updateOne(
-            { fileId, "viewers.country": country },
-            {
-                $inc: { "viewers.$.views": 1 }
+        if (!existingDoc) {
+            await FileShareAnalytics.create({
+                fileId,
+                downloads: 0,
+                views: 1,
+                lastUpdated: new Date(),
+                viewers: [{ country, views: 1 }]
+            });
+        } else {
+            // هل الدولة موجودة بالفعل في viewers؟
+            const viewerIndex = existingDoc.viewers.findIndex(v => v.country === country);
+
+            if (viewerIndex !== -1) {
+                // تحديث السجل الموجود
+                await FileShareAnalytics.updateOne(
+                    { fileId, [`viewers.${viewerIndex}.country`]: country },
+                    {
+                        $inc: {
+                            views: 1,
+                            [`viewers.${viewerIndex}.views`]: 1
+                        },
+                        $set: { lastUpdated: new Date() }
+                    }
+                );
+            } else {
+                // الدولة غير موجودة - نضيفها
+                await FileShareAnalytics.updateOne(
+                    { fileId },
+                    {
+                        $inc: { views: 1 },
+                        $set: { lastUpdated: new Date() },
+                        $push: { viewers: { country, views: 1 } }
+                    }
+                );
             }
-        );
-
-        // إذا لم يتم تحديث أي سجل، يعني الدولة جديدة، نضيفها
-        if (updateResult.matchedCount === 0) {
-            await FileShareAnalytics.updateOne(
-                { fileId },
-                {
-                    $push: { viewers: { country, views: 1 } }
-                }
-            );
         }
 
         return res.status(200).json({
@@ -280,7 +297,7 @@ export const getSharedFile = async (req, res) => {
             file: {
                 id: file._id,
                 name: file.fileName,
-                type: file.fileType,   // صحح الحقل لو هو fileType مش fileSize
+                type: file.fileType,
                 size: file.fileSize,
                 url: file.url,
                 sharedBy: {
@@ -295,7 +312,7 @@ export const getSharedFile = async (req, res) => {
         console.error("Error in getSharedFile:", err);
         return res.status(500).json({ message: "❌ حدث خطأ أثناء جلب الملف", error: err.message });
     }
-  };
+};
 
 
 export const incrementFileView = async (req, res, next) => {
