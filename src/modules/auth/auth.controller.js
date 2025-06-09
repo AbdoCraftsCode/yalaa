@@ -43,7 +43,7 @@ routr.get("/getShareLinkAnalytics", authentication(), getShareLinkAnalytics)
 
 routr.get("/getUserAnalytics", authentication(), getUserAnalytics)
 routr.get("/getUserRoleById/:_id", getUserRoleById)
-routr.get("/getSharedFile/:fileId", incrementFileView,getSharedFile)
+routr.get("/getSharedFile/:fileId" ,getSharedFile)
 routr.post("/addQuestion", addQuestion)
 routr.post("/submitAnswer", authentication(), submitAnswer)
 routr.get("/getMyRank", authentication(), getMyRank)
