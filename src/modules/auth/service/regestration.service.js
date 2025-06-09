@@ -58,7 +58,17 @@ import { getName } from 'country-list';
 
 // })
 
-
+// utils/countryPricing.js
+export const countryPricing = {
+    EG: 0.0003,        // Egypt
+    IN: 0.0002,        // India
+    SA: 0.0015,        // Saudi Arabia
+    AE: 0.0012,        // UAE
+    KW: 0.0014,        // Kuwait
+    US: 0.0018,        // USA
+    DEFAULT: 0.0001    // Any other country
+};
+  
 
 export const createFile = async (req, res) => {
     try {
@@ -241,7 +251,7 @@ export const getSharedFile = async (req, res) => {
             return res.status(404).json({ message: "❌ الملف غير موجود أو لم يتم مشاركته." });
         }
 
-        // الحصول على IP العميل
+        // IP
         const ip =
             req.headers['x-forwarded-for'] ||
             req.connection?.remoteAddress ||
@@ -250,10 +260,10 @@ export const getSharedFile = async (req, res) => {
 
         const geo = geoip.lookup(ip);
         const countryCode = geo?.country || 'Unknown';
-        const country = countryCode;
+        const country = countryCode; // استخدم كود الدولة فقط (مثل "US", "EG", إلخ)
 
+        const pricePerView = countryPricing[countryCode] || countryPricing.DEFAULT;
 
-        // التأكد من وجود السجل الأساسي
         const existingDoc = await FileShareAnalytics.findOne({ fileId });
 
         if (!existingDoc) {
@@ -261,33 +271,33 @@ export const getSharedFile = async (req, res) => {
                 fileId,
                 downloads: 0,
                 views: 1,
+                earnings: pricePerView,
                 lastUpdated: new Date(),
-                viewers: [{ country, views: 1 }]
+                viewers: [{ country, views: 1, earnings: pricePerView }]
             });
         } else {
-            // هل الدولة موجودة بالفعل في viewers؟
             const viewerIndex = existingDoc.viewers.findIndex(v => v.country === country);
 
             if (viewerIndex !== -1) {
-                // تحديث السجل الموجود
                 await FileShareAnalytics.updateOne(
                     { fileId, [`viewers.${viewerIndex}.country`]: country },
                     {
                         $inc: {
                             views: 1,
-                            [`viewers.${viewerIndex}.views`]: 1
+                            earnings: pricePerView,
+                            [`viewers.${viewerIndex}.views`]: 1,
+                            [`viewers.${viewerIndex}.earnings`]: pricePerView
                         },
                         $set: { lastUpdated: new Date() }
                     }
                 );
             } else {
-                // الدولة غير موجودة - نضيفها
                 await FileShareAnalytics.updateOne(
                     { fileId },
                     {
-                        $inc: { views: 1 },
+                        $inc: { views: 1, earnings: pricePerView },
                         $set: { lastUpdated: new Date() },
-                        $push: { viewers: { country, views: 1 } }
+                        $push: { viewers: { country, views: 1, earnings: pricePerView } }
                     }
                 );
             }
@@ -1174,3 +1184,8 @@ export const getAllRanks = asyncHandelr(async (req, res, next) => {
 
 
 // CIENT_ID = '221980279766-k063a77vogpfreoegb4nui67olml16he.apps.googleusercontent.com'
+
+
+// utils/countryPricing.js
+
+  
