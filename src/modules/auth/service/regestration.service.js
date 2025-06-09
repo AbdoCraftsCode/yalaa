@@ -69,6 +69,33 @@ export const countryPricing = {
     DEFAULT: 0.0001    // Any other country
 };
   
+export const getUserEarnings = async (req, res) => {
+    try {
+        const userId = req.user._id;
+
+        // الملفات المشتركة الخاصة بالمستخدم
+        const files = await File.find({ userId, shared: true }).select('_id fileName');
+
+        const fileIds = files.map(f => f._id);
+
+        const analytics = await FileShareAnalytics.find({ fileId: { $in: fileIds } })
+            .select('fileId earnings');
+
+        const totalEarnings = analytics.reduce((sum, record) => sum + (record.earnings || 0), 0);
+
+        return res.status(200).json({
+            message: "✅ تم جلب أرباح المستخدم بنجاح",
+            totalEarnings: totalEarnings.toFixed(6), // بالدقة
+            currency: "USD"
+        });
+    } catch (err) {
+        console.error("Error in getUserEarnings:", err);
+        return res.status(500).json({ message: "❌ حدث خطأ أثناء جلب الأرباح", error: err.message });
+    }
+};
+  
+
+
 
 export const createFile = async (req, res) => {
     try {
