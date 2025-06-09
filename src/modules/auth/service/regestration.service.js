@@ -630,9 +630,9 @@ export const signup = asyncHandelr(async (req, res, next) => {
 });
 
 export const updateProfile = asyncHandelr(async (req, res, next) => {
-    const { country } = req.body;
+    const { watchingplan, Downloadsplan, isPromoter } = req.body;
 
-    // استخراج الـ userId من التوكن بعد التحقق (مثلاً من middleware)
+   
     const _id = req.user._id;
 
     // التأكد أن المستخدم موجود
@@ -646,7 +646,9 @@ export const updateProfile = asyncHandelr(async (req, res, next) => {
         model: Usermodel,
         filter: { _id },
         data: {
-            ...(country && { country }),
+            ...(isPromoter && { isPromoter }),
+            ...(Downloadsplan && { Downloadsplan }),
+            ...(watchingplan && { watchingplan }),
          
         },
         options: { new: true }, // لإرجاع البيانات بعد التعديل

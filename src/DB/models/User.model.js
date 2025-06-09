@@ -29,7 +29,11 @@ const userSchema = new mongoose.Schema(
             },
         },
         mobileNumber: { type: String },
-        country: { type: String, default: false }, // تعديل هنا من false لـ "Unknown"
+        country: { type: String, default: false },
+        watchingplan: { type: Boolean, default: false },
+        Downloadsplan: { type: Boolean, default: false },
+        isPromoter: { type: Boolean, default: false },
+
         role: { type: String, enum: Object.values(roletypes),  default: roletypes.User },
         isConfirmed: { type: Boolean, default: false },
         deletedAt: { type: Date },
@@ -49,6 +53,8 @@ const userSchema = new mongoose.Schema(
             type: mongoose.Schema.Types.ObjectId,
             ref: "Class"
         },
+
+
      
         profilePic: {
             secure_url: { type: String, }, // الصورة مطلوبة
