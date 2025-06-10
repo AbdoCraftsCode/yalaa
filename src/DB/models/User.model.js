@@ -27,7 +27,8 @@ const userSchema = new mongoose.Schema(
                 },
                 message: "Date of Birth must be in the past and age must be greater than 18 years.",
             },
-        },
+        },  
+           
         mobileNumber: { type: String },
         country: { type: String, default: false },
         watchingplan: { type: Boolean, default: false },

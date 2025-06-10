@@ -120,6 +120,11 @@ export const Getloginuseraccount = asyncHandelr(async (req, res, next) => {
         email: user.email,
         isBrimume: user.isBrimume,
         userId: user.userId,
+        isPromoter: user.isPromoter,
+        role: user.role,
+        watchingplan: user.watchingplan,
+        Downloadsplan: user.Downloadsplan,
+
         profilePic: user.profilePic?.secure_url || null, // يرجع رابط الصورة أو null لو مش موجودة
     });
 });
