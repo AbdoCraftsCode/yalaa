@@ -158,6 +158,92 @@ export const createFile = async (req, res) => {
     }
   };
 
+export const deleteFile = async (req, res) => {
+    try {
+        const userId = req.user._id;
+        const { fileId } = req.params;
+
+        // التحقق من وجود الملف
+        const file = await File.findById(fileId);
+        if (!file) {
+            return res.status(404).json({ message: "❌ الملف غير موجود" });
+        }
+
+        // التأكد أن الملف يخص المستخدم
+        if (file.userId.toString() !== userId.toString()) {
+            return res.status(403).json({ message: "❌ غير مصرح لك بحذف هذا الملف" });
+        }
+
+        // استخراج public_id من رابط Cloudinary
+        const publicId = file.url.split("/").slice(-1)[0].split(".")[0];
+        const resourceType = file.fileType.startsWith("image/")
+            ? "image"
+            : file.fileType.startsWith("video/")
+                ? "video"
+                : "raw";
+
+        // حذف من Cloudinary
+        await cloud.uploader.destroy(`cloudbox/${publicId}`, {
+            resource_type: resourceType,
+        });
+
+        // حذف من قاعدة البيانات
+        await file.deleteOne();
+
+        res.status(200).json({ message: "✅ تم حذف الملف بنجاح" });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({
+            message: "❌ حدث خطأ أثناء حذف الملف",
+            error: err.message,
+        });
+    }
+  };
+
+export const updateFileName = async (req, res) => {
+    try {
+        const userId = req.user._id;
+        const { fileId } = req.params;
+        const { newFileName } = req.body;
+
+        if (!newFileName) {
+            return res.status(400).json({ message: "❌ يرجى إدخال اسم جديد للملف." });
+        }
+
+        const file = await File.findById(fileId);
+        if (!file) {
+            return res.status(404).json({ message: "❌ الملف غير موجود." });
+        }
+
+        if (file.userId.toString() !== userId.toString()) {
+            return res.status(403).json({ message: "❌ غير مصرح لك بتعديل هذا الملف." });
+        }
+
+        // استخراج الامتداد القديم
+        const oldExtension = file.fileName.split(".").pop();
+        const newFileNameWithExtension = newFileName.endsWith(`.${oldExtension}`)
+            ? newFileName
+            : `${newFileName}.${oldExtension}`;
+
+        file.fileName = newFileNameWithExtension;
+        await file.save();
+
+        res.status(200).json({
+            message: "✅ تم تعديل اسم الملف بنجاح",
+            file,
+        });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({
+            message: "❌ حدث خطأ أثناء تعديل اسم الملف",
+            error: err.message,
+        });
+    }
+};
+  
+
+
+
 export const getUserFiles = async (req, res) => {
     try {
         const userId = req.user._id;

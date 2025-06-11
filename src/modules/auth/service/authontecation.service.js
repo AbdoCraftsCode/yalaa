@@ -154,7 +154,7 @@ export const loginwithGmail = asyncHandelr(async (req, res, next) => {
         return next(new Error("Email not verified", { cause: 403 }));
     }
 
-    // Step 2: Check if user exists
+
     let user = await dbservice.findOne({
         model: Usermodel,
         filter: { email },
@@ -164,7 +164,7 @@ export const loginwithGmail = asyncHandelr(async (req, res, next) => {
         return next(new Error("Invalid account. Please login using your email/password", { cause: 403 }));
     }
 
-    // ✅ Step 3: If not exist, create and generate userId
+    
     if (!user) {
         let userId;
         let isUnique = false;
