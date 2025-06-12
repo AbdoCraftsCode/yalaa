@@ -9,6 +9,8 @@ import File from "../../../DB/models/files.conrroller.js";
 import fs from 'fs';
 import admin from 'firebase-admin';
 
+import axios from 'axios';
+
 import { NotificationModel } from "../../../DB/models/points.model.js";
 
 export const Updateuseraccount = asyncHandelr(async (req, res, next) => {
@@ -355,6 +357,8 @@ export const createFolder = asyncHandelr(async (req, res, next) => {
     });
 });
   
+
+
 export const getUserFolders = asyncHandelr(async (req, res) => {
     const userId = req.user._id;
 
@@ -451,6 +455,108 @@ export const getFolderFiles = asyncHandelr(async (req, res) => {
     });
 });
   
+
+export const generateFolderShareLink = async (req, res) => {
+    try {
+        const userId = req.user._id;
+        const { folderId } = req.body;
+
+        if (!folderId) {
+            return res.status(400).json({ message: '❌ يُرجى إرسال معرف المجلد.' });
+        }
+
+        const folder = await Folder.findOne({ _id: folderId, userId });
+
+        if (!folder) {
+            return res.status(404).json({ message: '❌ المجلد غير موجود أو لا تملك صلاحية الوصول إليه.' });
+        }
+
+        const branchRes = await axios.post('https://api2.branch.io/v1/url', {
+            branch_key: process.env.BRANCH_KEY,
+            campaign: 'folder_share',
+            feature: 'sharing',
+            channel: 'in_app',
+            data: {
+                "$deeplink_path": `shared-folder/${folderId}`,
+                "folder_id": folderId,
+                "shared_by": userId,
+                "$android_url": `https://mega-box.vercel.app/shared-folder/${folderId}`,
+                "$fallback_url": `https://mega-box.vercel.app/shared-folder/${folderId}`,
+                "$desktop_url": `https://mega-box.vercel.app/shared-folder/${folderId}`,
+                "$og_title": "📂 مشاركة مجلد",
+                "$og_description": `تمت مشاركة مجلد "${folder.name}" معك`,
+                "$og_image_url": "https://mega-box.vercel.app/share/78///folder-share-image.png"
+            }
+        });
+
+        const shareLink = branchRes.data?.url;
+
+        if (!shareLink) {
+            return res.status(500).json({ message: '❌ لم يتم استلام رابط المشاركة من Branch.' });
+        }
+
+        folder.shared = true;
+        folder.sharedUrl = shareLink;
+        await folder.save();
+
+        return res.status(200).json({
+            message: "✅ تم إنشاء رابط مشاركة المجلد بنجاح",
+            shareUrl: shareLink,
+        });
+
+    } catch (err) {
+        console.error("Error generating folder share link:", err);
+        return res.status(500).json({
+            message: "❌ حدث خطأ أثناء إنشاء رابط المشاركة",
+            error: err?.response?.data || err.message,
+        });
+    }
+};
+
+export const getSharedFolderContent = async (req, res) => {
+    try {
+        const { folderId } = req.params;
+
+        if (!folderId) {
+            return res.status(400).json({ message: "❌ يجب إرسال معرف المجلد." });
+        }
+
+        const folder = await Folder.findById(folderId).populate("userId", "username email");
+
+        if (!folder || !folder.shared) {
+            return res.status(404).json({ message: "❌ المجلد غير موجود أو لم يتم مشاركته." });
+        }
+
+        const files = await File.find({ folderId });
+
+        return res.status(200).json({
+            message: "✅ تم جلب محتوى المجلد بنجاح",
+            folder: {
+                id: folder._id,
+                name: folder.name,
+                sharedBy: {
+                    username: folder.userId.username,
+                    email: folder.userId.email,
+                },
+                createdAt: folder.createdAt,
+                files: files.map(file => ({
+                    id: file._id,
+                    name: file.fileName,
+                    type: file.fileType,
+                    size: file.fileSize,
+                    url: file.url,
+                    createdAt: file.createdAt,
+                }))
+            }
+        });
+
+    } catch (err) {
+        console.error("Error in getSharedFolderContent:", err);
+        return res.status(500).json({ message: "❌ حدث خطأ أثناء جلب المجلد", error: err.message });
+    }
+};
+
+
 const getPublicIdFromUrl = (url) => {
     const parts = url.split("/");
     const filenameWithExtension = parts.pop().split(".")[0]; // آخر جزء قبل الامتداد

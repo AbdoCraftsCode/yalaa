@@ -285,7 +285,7 @@ export const generateShareLink = async (req, res) => {
         const userId = req.user._id;
         const { fileId } = req.body;
 
-        // التحقق من وجود معرف الملف
+
         if (!fileId) {
             return res.status(400).json({ message: '❌ يُرجى إرسال معرف الملف.' });
         }
@@ -465,6 +465,8 @@ export const incrementFileView = async (req, res, next) => {
         });
     }
 };
+
+
 
 export const getShareLinkAnalytics = async (req, res) => {
     try {
