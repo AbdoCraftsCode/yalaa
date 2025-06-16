@@ -19,6 +19,13 @@ const FileShareAnalyticsSchema = new mongoose.Schema({
         type: Date,
         default: Date.now,
     },
+    viewLogs: [
+        {
+            ip: String,
+            viewedAt: Date
+        }
+    ],
+      
     earnings: Number, // جديد
     viewers: [
         {

@@ -364,55 +364,73 @@ export const getSharedFile = async (req, res) => {
             return res.status(404).json({ message: "❌ الملف غير موجود أو لم يتم مشاركته." });
         }
 
-        // IP
+        // تحديد الـ IP
         const ip =
-            req.headers['x-forwarded-for'] ||
+            req.headers['x-forwarded-for']?.split(',')[0] ||
             req.connection?.remoteAddress ||
             req.socket?.remoteAddress ||
             '0.0.0.0';
 
         const geo = geoip.lookup(ip);
         const countryCode = geo?.country || 'Unknown';
-        const country = countryCode; // استخدم كود الدولة فقط (مثل "US", "EG", إلخ)
+        const country = countryCode;
 
         const pricePerView = countryPricing[countryCode] || countryPricing.DEFAULT;
 
-        const existingDoc = await FileShareAnalytics.findOne({ fileId });
+        const ownerId = file.userId._id;
 
-        if (!existingDoc) {
-            await FileShareAnalytics.create({
-                fileId,
-                downloads: 0,
-                views: 1,
-                earnings: pricePerView,
-                lastUpdated: new Date(),
-                viewers: [{ country, views: 1, earnings: pricePerView }]
-            });
-        } else {
-            const viewerIndex = existingDoc.viewers.findIndex(v => v.country === country);
+        // نبحث عن أي مشاهدة من نفس الـ IP لنفس المالك خلال آخر 24 ساعة
+        const now = new Date();
+        const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000);
 
-            if (viewerIndex !== -1) {
-                await FileShareAnalytics.updateOne(
-                    { fileId, [`viewers.${viewerIndex}.country`]: country },
-                    {
-                        $inc: {
-                            views: 1,
-                            earnings: pricePerView,
-                            [`viewers.${viewerIndex}.views`]: 1,
-                            [`viewers.${viewerIndex}.earnings`]: pricePerView
-                        },
-                        $set: { lastUpdated: new Date() }
-                    }
-                );
+        const viewedBefore = await FileShareAnalytics.findOne({
+            fileId,
+            'viewLogs': {
+                $elemMatch: {
+                    ip,
+                    viewedAt: { $gte: yesterday }
+                }
+            }
+        });
+
+        // لا تحتسب المشاهدة إذا تمت خلال 24 ساعة
+        const shouldCount = !viewedBefore;
+
+        if (shouldCount) {
+            const existingDoc = await FileShareAnalytics.findOne({ fileId });
+
+            if (!existingDoc) {
+                await FileShareAnalytics.create({
+                    fileId,
+                    downloads: 0,
+                    views: 1,
+                    earnings: pricePerView,
+                    lastUpdated: new Date(),
+                    viewers: [{ country, views: 1, earnings: pricePerView }],
+                    viewLogs: [{ ip, viewedAt: now }]
+                });
             } else {
-                await FileShareAnalytics.updateOne(
-                    { fileId },
-                    {
-                        $inc: { views: 1, earnings: pricePerView },
-                        $set: { lastUpdated: new Date() },
-                        $push: { viewers: { country, views: 1, earnings: pricePerView } }
+                const viewerIndex = existingDoc.viewers.findIndex(v => v.country === country);
+
+                const updateObj = {
+                    $inc: {
+                        views: 1,
+                        earnings: pricePerView
+                    },
+                    $set: { lastUpdated: now },
+                    $push: {
+                        viewLogs: { ip, viewedAt: now }
                     }
-                );
+                };
+
+                if (viewerIndex !== -1) {
+                    updateObj.$inc[`viewers.${viewerIndex}.views`] = 1;
+                    updateObj.$inc[`viewers.${viewerIndex}.earnings`] = pricePerView;
+                } else {
+                    updateObj.$push.viewers = { country, views: 1, earnings: pricePerView };
+                }
+
+                await FileShareAnalytics.updateOne({ fileId }, updateObj);
             }
         }
 
@@ -437,6 +455,7 @@ export const getSharedFile = async (req, res) => {
         return res.status(500).json({ message: "❌ حدث خطأ أثناء جلب الملف", error: err.message });
     }
 };
+  
 
 
 export const incrementFileView = async (req, res, next) => {
