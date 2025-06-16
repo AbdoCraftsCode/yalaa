@@ -12,52 +12,47 @@ import { scketConnections } from "../../../DB/models/User.model.js";
 export const sendMessage = (socket) => {
     return socket.on("sendMessage", async (messageData) => {
         const { data } = await authenticationSocket({ socket });
-        console.log(data);
 
         if (!data.valid) {
             return socket.emit("socketErrorResponse", data);
         }
 
         const userId = data.user._id.toString();
-        const { destId, message } = messageData;
+        const { message } = messageData;
 
-        const chat = await dbservice.findOneAndUpdate({
-            model: ChatModel,
-            filter: {
-                $or: [
-                    { mainUser: userId, subpartisipant: destId },
-                    { mainUser: destId, subpartisipant: userId }
-                ]
-            },
-            data: {
-                $push: {
-                    messages: {
-                        message,
-                        senderId: userId
-                    }
-                }
-            }
-        });
+        // جلب الشات الجماعي الوحيد
+        const chat = await ChatModel.findOne();
 
+        // لو ما فيش شات جماعي، ننشئه أول مرة
         if (!chat) {
-            await dbservice.create({
-                model: ChatModel,
-                data: {
-                    mainUser: userId,
-                    subpartisipant: destId,
-                    messages: [
-                        {
-                            message,
-                            senderId: userId
-                        }
-                    ]
-                }
+            await ChatModel.create({
+                participants: [userId],
+                messages: [{
+                    message,
+                    senderId: userId
+                }]
             });
+        } else {
+            // تأكد إن المستخدم جزء من المشاركين
+            if (!chat.participants.includes(userId)) {
+                chat.participants.push(userId);
+            }
+
+            // أضف الرسالة
+            chat.messages.push({ message, senderId: userId });
+            await chat.save();
+        }
+
+        // بث الرسالة لكل المستخدمين في الشات
+        for (const participantId of chat.participants) {
+            if (participantId.toString() !== userId && scketConnections.has(participantId.toString())) {
+                socket.to(scketConnections.get(participantId.toString())).emit("receiveMessage", {
+                    message,
+                    senderId: userId
+                });
+            }
         }
 
         socket.emit("successMessage", { message });
-        socket.to(scketConnections.get(destId)).emit("receiveMessage", { message });
-
-        return "done";
     });
 };

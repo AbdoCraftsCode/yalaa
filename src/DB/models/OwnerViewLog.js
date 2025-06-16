@@ -6,5 +6,5 @@ const ownerViewLogSchema = new mongoose.Schema({
     viewedAt: { type: Date, default: Date.now }
 });
 
-// export default mongoose.model("OwnerViewLog", ownerViewLogSchema);
+
 export const OwnerViewLog = mongoose.model("OwnerViewLog", ownerViewLogSchema);
