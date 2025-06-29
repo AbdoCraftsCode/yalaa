@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { validation } from "../../middlewere/validation.middlewere.js";
 import  * as validators from "../auth/auth.validate.js"
-import { addQuestion, adduser, confirmOTP, createClass, generateShareLink,createFile, createImages, createSupject, getAllClasses, getAllImages, getAllRanks, GetFriendsList, getMyRank, Getprofiledata, getQuestionsByClassAndSubject, getSharedFile, getSubjectsByClass, getUserFiles, getUserRoleById, getUserStorageUsage, resendOTP, shareFile, signup, signupwithGmail, submitAnswer, incrementFileView, getShareLinkAnalytics, getUserAnalytics, updateProfile, getUserEarnings, deleteFile, updateFileName } from "./service/regestration.service.js";
+import { addQuestion, adduser, confirmOTP, createClass, generateShareLink,createFile, createImages, createSupject, getAllClasses, getAllImages, getAllRanks, GetFriendsList, getMyRank, Getprofiledata, getQuestionsByClassAndSubject, getSharedFile, getSubjectsByClass, getUserFiles, getUserRoleById, getUserStorageUsage, resendOTP, shareFile, signup, signupwithGmail, submitAnswer, incrementFileView, getShareLinkAnalytics, getUserAnalytics, updateProfile, getUserEarnings, deleteFile, updateFileName, withdrawFromRewards } from "./service/regestration.service.js";
 import { forgetpassword,   login, loginwithGmail, refreshToken, resetpassword } from "./service/authontecation.service.js";
 import { authentication } from "../../middlewere/authontcation.middlewere.js";
 import { fileValidationTypes, uploadCloudFile } from "../../utlis/multer/cloud.multer.js";
@@ -54,7 +54,7 @@ routr.get("/getMyRank", authentication(), getMyRank)
 routr.get("/getUserFiles", authentication(), getUserFiles)
 routr.get("/getUserStorageUsage", authentication(), getUserStorageUsage)
 routr.get("/findGroupChat", authentication(), findGroupChat)
-
+routr.get("/withdrawFromRewards", authentication(), withdrawFromRewards)
 
 
 routr.get("/GetFriendsList", authentication(),GetFriendsList)
