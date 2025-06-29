@@ -43,7 +43,7 @@ const userSchema = new mongoose.Schema(
         isBrimume: { type: Boolean, default: false },
         updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
         changecredintialTime: { type: Date },
-        isBusy: { type: Boolean, default: false },
+        isclosed: { type: Boolean, default: false },
         isSearching: { type: Boolean, default: false },
         fcmToken: { type: String, default: null },
         image: {

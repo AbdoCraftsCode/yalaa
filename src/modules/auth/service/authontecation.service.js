@@ -256,5 +256,59 @@ export const resetpassword = asyncHandelr(async (req, res, next) => {
 });
 
 
+export const toggleUserBanByOwner = asyncHandelr(async (req, res, next) => {
+    const { userId } = req.params;
 
+    // ✅ تحقق إن المستخدم اللي بيطلب هو Owner
+    const requester = await Usermodel.findById(req.user._id);
+    if (!requester || requester.role !== "Owner") {
+        return res.status(403).json({ message: "❌ ليس لديك صلاحية تنفيذ هذا الإجراء." });
+    }
 
+    // ✅ تحقق إن المستخدم المستهدف موجود
+    const targetUser = await Usermodel.findById(userId);
+    if (!targetUser) {
+        return res.status(404).json({ message: "❌ المستخدم غير موجود." });
+    }
+
+    // 🔁 عكس حالة الحظر
+    targetUser.isBanned = !targetUser.isBanned;
+    await targetUser.save();
+
+    res.status(200).json({
+        message: targetUser.isBanned
+            ? "✅ تم حظر المستخدم بنجاح"
+            : "✅ تم فك الحظر عن المستخدم",
+        userId: targetUser._id,
+        isBanned: targetUser.isBanned,
+    });
+});
+
+export const deleteUserById = asyncHandelr(async (req, res) => {
+    const { userId } = req.params;
+
+    // تحقق إن صاحب الطلب هو Owner
+    const owner = await Usermodel.findById(req.user._id);
+    if (!owner || owner.role !== "Owner") {
+        return res.status(403).json({ message: "❌ ليس لديك صلاحية الحذف." });
+    }
+
+    // تحقق من وجود المستخدم
+    const targetUser = await Usermodel.findById(userId);
+    if (!targetUser) {
+        return res.status(404).json({ message: "❌ المستخدم غير موجود." });
+    }
+
+    // لا يمكن حذف الـ Owner نفسه
+    if (targetUser._id.toString() === req.user._id.toString()) {
+        return res.status(400).json({ message: "❌ لا يمكنك حذف نفسك." });
+    }
+
+    // تنفيذ الحذف
+    await Usermodel.findByIdAndDelete(userId);
+
+    res.status(200).json({
+        message: "✅ تم حذف المستخدم بنجاح.",
+        deletedUserId: userId,
+    });
+});

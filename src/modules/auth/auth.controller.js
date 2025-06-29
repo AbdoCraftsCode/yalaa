@@ -2,7 +2,7 @@ import { Router } from "express";
 import { validation } from "../../middlewere/validation.middlewere.js";
 import  * as validators from "../auth/auth.validate.js"
 import { addQuestion, adduser, confirmOTP, createClass, generateShareLink, createFile, createImages, createSupject, getAllClasses, getAllImages, getAllRanks, GetFriendsList, getMyRank, Getprofiledata, getQuestionsByClassAndSubject, getSharedFile, getSubjectsByClass, getUserFiles, getUserRoleById, getUserStorageUsage, resendOTP, shareFile, signup, signupwithGmail, submitAnswer, incrementFileView, getShareLinkAnalytics, getUserAnalytics, updateProfile, getUserEarnings, deleteFile, updateFileName, withdrawEarnings, getWithdrawalHistory, getAllPromoters, getUserAnalyticsadmin, getUserEarningsadmin, getShareLinkAnalyticsadmin } from "./service/regestration.service.js";
-import { forgetpassword,   login, loginwithGmail, refreshToken, resetpassword } from "./service/authontecation.service.js";
+import { deleteUserById, forgetpassword,   login, loginwithGmail, refreshToken, resetpassword, toggleUserBanByOwner } from "./service/authontecation.service.js";
 import { authentication } from "../../middlewere/authontcation.middlewere.js";
 import { fileValidationTypes, uploadCloudFile } from "../../utlis/multer/cloud.multer.js";
 import { findGroupChat } from "../chat/chat/chat.service.js";
@@ -65,6 +65,8 @@ routr.post("/createSupject", createSupject)
 routr.post("/confirmOTP", confirmOTP)
 routr.get("/Getprofiledata", authentication(), Getprofiledata)
 routr.get("/getWithdrawalHistory", authentication(), getWithdrawalHistory)
+routr.patch("/toggleUserBanByOwner/:userId", authentication(), toggleUserBanByOwner)
+routr.delete("/deleteUserById/:userId", authentication(), deleteUserById)
 routr.post("/login", login)
 routr.post("/shareFile/:id", shareFile)
 
