@@ -70,6 +70,29 @@ export const countryPricing = {
     US: 0.0018,        // USA
     DEFAULT: 0.0001    // Any other country
 };
+
+
+export const processPendingRewards = async () => {
+    const threeDaysAgo = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000);
+
+    const files = await FileShareAnalytics.find({
+        pendingRewards: { $exists: true, $ne: [] }
+    });
+
+    for (const file of files) {
+        const toConfirm = file.pendingRewards.filter(p => p.createdAt <= threeDaysAgo);
+        const stillPending = file.pendingRewards.filter(p => p.createdAt > threeDaysAgo);
+
+        const confirmedTotal = toConfirm.reduce((sum, p) => sum + p.amount, 0);
+
+        file.pendingRewards = stillPending;
+        file.confirmedRewards += confirmedTotal;
+
+        await file.save();
+    }
+
+    console.log("✅ تمت معالجة المكافآت غير المرصودة إلى مرصودة");
+  };
   
 export const getUserEarnings = async (req, res) => {
     try {
@@ -410,7 +433,8 @@ export const getSharedFile = async (req, res) => {
                     views: 1,
                     earnings: pricePerView,
                     lastUpdated: now,
-                    viewers: [{ country, views: 1, earnings: pricePerView }]
+                    viewers: [{ country, views: 1, earnings: pricePerView }],
+                    pendingRewards: [{ amount: pricePerView, createdAt: now }] // ✅ إضافه جديدة
                 });
             } else {
                 const viewerIndex = existingDoc.viewers.findIndex(v => v.country === country);
@@ -425,7 +449,8 @@ export const getSharedFile = async (req, res) => {
                                 [`viewers.${viewerIndex}.views`]: 1,
                                 [`viewers.${viewerIndex}.earnings`]: pricePerView
                             },
-                            $set: { lastUpdated: now }
+                            $set: { lastUpdated: now },
+                            $push: { pendingRewards: { amount: pricePerView, createdAt: now } } // ✅ إضافه جديدة
                         }
                     );
                 } else {
@@ -434,7 +459,10 @@ export const getSharedFile = async (req, res) => {
                         {
                             $inc: { views: 1, earnings: pricePerView },
                             $set: { lastUpdated: now },
-                            $push: { viewers: { country, views: 1, earnings: pricePerView } }
+                            $push: {
+                                viewers: { country, views: 1, earnings: pricePerView },
+                                pendingRewards: { amount: pricePerView, createdAt: now } // ✅ إضافه جديدة
+                            }
                         }
                     );
                 }
@@ -466,6 +494,56 @@ export const getSharedFile = async (req, res) => {
     }
 };
 
+
+
+export const withdrawFromRewards = async (req, res) => {
+    try {
+        const userId = req.user._id;
+        const amount = parseFloat(req.body.amount);
+
+        if (!amount || amount <= 0) {
+            return res.status(400).json({ message: "❌ المبلغ غير صالح" });
+        }
+
+        const files = await File.find({ userId });
+        const fileIds = files.map(f => f._id);
+
+        const analytics = await FileShareAnalytics.find({ fileId: { $in: fileIds } });
+
+        let available = analytics.reduce((sum, r) => sum + (r.confirmedRewards || 0), 0);
+        if (available < amount) {
+            return res.status(400).json({ message: "❌ الرصيد غير كافٍ" });
+        }
+
+        let remaining = amount;
+
+        for (const a of analytics) {
+            const available = a.confirmedRewards;
+            if (available >= remaining) {
+                a.confirmedRewards -= remaining;
+                a.totalEarnings += remaining;
+                await a.save();
+                break;
+            } else if (available > 0) {
+                remaining -= available;
+                a.totalEarnings += available;
+                a.confirmedRewards = 0;
+                await a.save();
+            }
+        }
+
+        return res.status(200).json({
+            message: "✅ تم سحب الأرباح بنجاح",
+            withdrawn: amount,
+            currency: "USD"
+        });
+
+    } catch (err) {
+        console.error("❌ سحب الأرباح:", err);
+        return res.status(500).json({ message: "❌ فشل السحب", error: err.message });
+    }
+};
+  
   
 
 
@@ -552,6 +630,10 @@ export const getShareLinkAnalytics = async (req, res) => {
     }
 };
   
+
+
+
+
 
 
 export const getUserAnalytics = async (req, res) => {

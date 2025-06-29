@@ -1,3 +1,4 @@
+// models/FileShareAnalytics.js
 import mongoose from "mongoose";
 
 const FileShareAnalyticsSchema = new mongoose.Schema({
@@ -19,22 +20,32 @@ const FileShareAnalyticsSchema = new mongoose.Schema({
         type: Date,
         default: Date.now,
     },
-    viewLogs: [
-        {
-            ip: String,
-            viewedAt: Date
-        }
-    ],
-      
-    earnings: Number, // جديد
+    earnings: Number,
+
     viewers: [
         {
             country: { type: String },
             views: { type: Number, default: 1 },
             earnings: { type: Number, default: 0 },
         }
-    ]
-      
+    ],
+
+    pendingRewards: [
+        {
+            amount: Number,
+            createdAt: { type: Date, default: Date.now }
+        }
+    ],
+
+    confirmedRewards: {
+        type: Number,
+        default: 0
+    },
+
+    totalEarnings: {
+        type: Number,
+        default: 0
+    }
 });
 
 export const FileShareAnalytics = mongoose.model("Analises", FileShareAnalyticsSchema);
