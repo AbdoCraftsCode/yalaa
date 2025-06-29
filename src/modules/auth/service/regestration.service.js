@@ -26,6 +26,7 @@ import mongoose from "mongoose";
 import geoip from 'geoip-lite';
 import { getName } from 'country-list';
 import { OwnerViewLog } from "../../../DB/models/OwnerViewLog.js";
+import { WithdrawalLog } from "../../../DB/models/WithdrawalLog.model.js";
 
 // export const signup = asyncHandelr(async (req, res, next) => {
     
@@ -98,29 +99,47 @@ export const getUserEarnings = async (req, res) => {
     try {
         const userId = req.user._id;
 
-        // الملفات المشتركة الخاصة بالمستخدم
-        const files = await File.find({ userId, shared: true }).select('_id fileName');
+        const files = await File.find({ userId, shared: true }).select('_id');
 
         const fileIds = files.map(f => f._id);
 
-        const analytics = await FileShareAnalytics.find({ fileId: { $in: fileIds } })
-            .select('fileId earnings');
+        const analytics = await FileShareAnalytics.find({ fileId: { $in: fileIds } });
 
-     
-        const totalEarnings = analytics.reduce((sum, record) => sum + (record.totalEarnings || 0), 0);
+        let pending = 0;
+        let confirmed = 0;
+        let withdrawn = 0;
 
+        const now = new Date();
+
+        for (const record of analytics) {
+            withdrawn += record.totalEarnings || 0;
+            confirmed += record.confirmedRewards || 0;
+
+            for (const pendingReward of record.pendingRewards || []) {
+                const createdAt = new Date(pendingReward.createdAt);
+                const daysPassed = (now - createdAt) / (1000 * 60 * 60 * 24);
+
+                if (daysPassed < 3) {
+                    pending += pendingReward.amount;
+                } else {
+                    confirmed += pendingReward.amount;
+                }
+            }
+        }
 
         return res.status(200).json({
-            message: "✅ تم جلب أرباح المستخدم بنجاح",
-            totalEarnings: totalEarnings.toFixed(6), // بالدقة
+            message: "✅ تفاصيل الأرباح",
+            pendingRewards: pending.toFixed(6),
+            confirmedRewards: confirmed.toFixed(6),
+            totalEarnings: withdrawn.toFixed(6),
             currency: "USD"
         });
+
     } catch (err) {
-        console.error("Error in getUserEarnings:", err);
-        return res.status(500).json({ message: "❌ حدث خطأ أثناء جلب الأرباح", error: err.message });
+        console.error("Error:", err);
+        return res.status(500).json({ message: "❌ حدث خطأ", error: err.message });
     }
-};
-  
+    };
 
 
 
@@ -498,54 +517,81 @@ export const getSharedFile = async (req, res) => {
 
 
 
-export const withdrawFromRewards = async (req, res) => {
+export const withdrawEarnings = async (req, res) => {
     try {
         const userId = req.user._id;
-        const amount = parseFloat(req.body.amount);
+        const { amount } = req.body;
 
-        if (!amount || amount <= 0) {
-            return res.status(400).json({ message: "❌ المبلغ غير صالح" });
+        if (!amount || isNaN(amount) || amount <= 0) {
+            return res.status(400).json({ message: "❌ قيمة غير صالحة للسحب." });
         }
 
-        const files = await File.find({ userId });
+        const files = await File.find({ userId, shared: true }).select('_id');
         const fileIds = files.map(f => f._id);
 
         const analytics = await FileShareAnalytics.find({ fileId: { $in: fileIds } });
 
-        let available = analytics.reduce((sum, r) => sum + (r.confirmedRewards || 0), 0);
-        if (available < amount) {
-            return res.status(400).json({ message: "❌ الرصيد غير كافٍ" });
+        let totalConfirmed = 0;
+
+        // حساب إجمالي الأرباح المؤكدة
+        for (const record of analytics) {
+            totalConfirmed += record.confirmedRewards || 0;
         }
 
+        if (amount > totalConfirmed) {
+            return res.status(400).json({ message: "❌ لا يوجد رصيد كافي للسحب." });
+        }
+
+        // توزيع الخصم على السجلات
         let remaining = amount;
+        for (const record of analytics) {
+            const available = record.confirmedRewards || 0;
+            if (available <= 0) continue;
 
-        for (const a of analytics) {
-            const available = a.confirmedRewards;
-            if (available >= remaining) {
-                a.confirmedRewards -= remaining;
-                a.totalEarnings += remaining;
-                await a.save();
-                break;
-            } else if (available > 0) {
-                remaining -= available;
-                a.totalEarnings += available;
-                a.confirmedRewards = 0;
-                await a.save();
-            }
+            const deduct = Math.min(available, remaining);
+            record.confirmedRewards -= deduct;
+            record.totalEarnings = (record.totalEarnings || 0) + deduct;
+            remaining -= deduct;
+            await record.save();
+
+            if (remaining <= 0) break;
         }
-
+        // ✅ تسجيل السحب في سجل العمليات
+        await WithdrawalLog.create({
+            userId,
+            amount,
+            currency: "USD",
+            status: "completed"
+        });
+  
         return res.status(200).json({
             message: "✅ تم سحب الأرباح بنجاح",
-            withdrawn: amount,
+            withdrawnAmount: amount.toFixed(6),
             currency: "USD"
         });
 
     } catch (err) {
-        console.error("❌ سحب الأرباح:", err);
-        return res.status(500).json({ message: "❌ فشل السحب", error: err.message });
+        console.error("Error during withdraw:", err);
+        return res.status(500).json({ message: "❌ فشل في عملية السحب", error: err.message });
     }
 };
   
+
+export const getWithdrawalHistory = async (req, res) => {
+    try {
+        const userId = req.user._id;
+
+        const withdrawals = await WithdrawalLog.find({ userId }).sort({ createdAt: -1 });
+
+        return res.status(200).json({
+            message: "✅ سجل عمليات السحب",
+            withdrawals
+        });
+    } catch (err) {
+        console.error("Error in getWithdrawalHistory:", err);
+        return res.status(500).json({ message: "❌ فشل في جلب سجل السحب", error: err.message });
+    }
+  };
   
 
 
@@ -1412,6 +1458,195 @@ export const getAllRanks = asyncHandelr(async (req, res, next) => {
 });
 
 
+export const getAllPromoters = async (req, res) => {
+    try {
+        const promoters = await Usermodel.find({ isPromoter: true })
+            .select("_id email Downloadsplan watchingplan username");
+
+        return res.status(200).json({
+            message: "✅ تم جلب المستخدمين المروجين بنجاح",
+            promoters
+        });
+    } catch (error) {
+        console.error("❌ Error fetching promoters:", error);
+        return res.status(500).json({
+            message: "❌ فشل في جلب المستخدمين المروجين",
+            error: error.message
+        });
+    }
+};
+  
+
+
+
+export const getUserAnalyticsadmin= async (req, res) => {
+    try {
+        const userId = req.params.userId; // ✅ الحصول على ID من الـ params
+
+        if (!userId) {
+            return res.status(400).json({
+                message: "❌ يجب إرسال معرف المستخدم في الرابط."
+            });
+        }
+
+        const files = await File.find({ userId, shared: true }).select('_id');
+
+        if (!files || files.length === 0) {
+            return res.status(404).json({
+                message: '❌ لا توجد ملفات مشتركة لهذا المستخدم.',
+                userId,
+                totalAnalytics: {
+                    totalDownloads: 0,
+                    totalViews: 0
+                }
+            });
+        }
+
+        const fileIds = files.map(file => file._id);
+
+        const analytics = await FileShareAnalytics.aggregate([
+            { $match: { fileId: { $in: fileIds } } },
+            {
+                $group: {
+                    _id: null,
+                    totalDownloads: { $sum: '$downloads' },
+                    totalViews: { $sum: '$views' }
+                }
+            }
+        ]);
+
+        const totalAnalytics = analytics.length > 0 ? {
+            totalDownloads: analytics[0].totalDownloads || 0,
+            totalViews: analytics[0].totalViews || 0
+        } : {
+            totalDownloads: 0,
+            totalViews: 0
+        };
+
+        return res.status(200).json({
+            message: '✅ تم جلب إجمالي بيانات التحليلات بنجاح',
+            userId, // ✅ تم إضافته هنا
+            totalAnalytics
+        });
+
+    } catch (err) {
+        console.error('Error in getUserAnalytics:', err);
+        return res.status(500).json({
+            message: '❌ حدث خطأ أثناء جلب إجمالي بيانات التحليلات',
+            error: err.message
+        });
+    }
+};
+
+
+export const getUserEarningsadmin = async (req, res) => {
+    try {
+        const userId = req.params.userId; // ✅ استخدام _id من params
+
+        if (!userId) {
+            return res.status(400).json({ message: "❌ يجب إرسال معرف المستخدم." });
+        }
+
+        const files = await File.find({ userId, shared: true }).select('_id');
+
+        const fileIds = files.map(f => f._id);
+
+        const analytics = await FileShareAnalytics.find({ fileId: { $in: fileIds } });
+
+        let pending = 0;
+        let confirmed = 0;
+        let withdrawn = 0;
+
+        const now = new Date();
+
+        for (const record of analytics) {
+            withdrawn += record.totalEarnings || 0;
+            confirmed += record.confirmedRewards || 0;
+
+            for (const pendingReward of record.pendingRewards || []) {
+                const createdAt = new Date(pendingReward.createdAt);
+                const daysPassed = (now - createdAt) / (1000 * 60 * 60 * 24);
+
+                if (daysPassed < 3) {
+                    pending += pendingReward.amount;
+                } else {
+                    confirmed += pendingReward.amount;
+                }
+            }
+        }
+
+        return res.status(200).json({
+            message: "✅ تفاصيل الأرباح",
+            userId,
+            pendingRewards: pending.toFixed(6),
+            confirmedRewards: confirmed.toFixed(6),
+            totalEarnings: withdrawn.toFixed(6),
+            currency: "USD"
+        });
+
+    } catch (err) {
+        console.error("Error:", err);
+        return res.status(500).json({ message: "❌ حدث خطأ", error: err.message });
+    }
+};
+
+export const getShareLinkAnalyticsadmin = async (req, res) => {
+    try {
+        const userId = req.params.userId; // ✅ استخدام _id من params
+
+        if (!userId) {
+            return res.status(400).json({ message: '❌ يجب إرسال معرف المستخدم.' });
+        }
+
+        const files = await File.find({ userId, shared: true }).select('_id fileName sharedUrl');
+
+        if (!files || files.length === 0) {
+            return res.status(404).json({
+                message: '❌ لا توجد ملفات مشتركة لهذا المستخدم.',
+                analytics: [],
+            });
+        }
+
+        const fileIds = files.map(file => file._id);
+
+        const analytics = await FileShareAnalytics.find({ fileId: { $in: fileIds } })
+            .select('fileId downloads views lastUpdated viewers');
+
+        const userAnalytics = files.map(file => {
+            const analytic = analytics.find(a => a.fileId.toString() === file._id.toString());
+
+            let viewsByCountry = [];
+
+            if (analytic?.viewers?.length > 0) {
+                viewsByCountry = analytic.viewers.map(viewer => ({
+                    country: viewer.country || 'Unknown',
+                    views: viewer.views || 1,
+                }));
+            }
+
+            return {
+                fileId: file._id,
+                fileName: file.fileName,
+                sharedUrl: file.sharedUrl,
+                downloads: analytic ? analytic.downloads : 0,
+                views: analytic ? analytic.views : 0,
+                lastUpdated: analytic ? analytic.lastUpdated : null,
+                viewsByCountry
+            };
+        });
+
+        return res.status(200).json({
+            message: '✅ تم جلب بيانات التحليلات بنجاح',
+            analytics: userAnalytics,
+        });
+    } catch (err) {
+        console.error('Error in getShareLinkAnalytics:', err);
+        return res.status(500).json({
+            message: '❌ حدث خطأ أثناء جلب بيانات التحليلات',
+            error: err.message,
+        });
+    }
+};
 
 
 // CIENT_ID = '221980279766-k063a77vogpfreoegb4nui67olml16he.apps.googleusercontent.com'
