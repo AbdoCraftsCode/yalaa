@@ -106,7 +106,9 @@ export const getUserEarnings = async (req, res) => {
         const analytics = await FileShareAnalytics.find({ fileId: { $in: fileIds } })
             .select('fileId earnings');
 
-        const totalEarnings = analytics.reduce((sum, record) => sum + (record.earnings || 0), 0);
+     
+        const totalEarnings = analytics.reduce((sum, record) => sum + (record.totalEarnings || 0), 0);
+
 
         return res.status(200).json({
             message: "✅ تم جلب أرباح المستخدم بنجاح",
