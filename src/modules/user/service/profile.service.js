@@ -497,6 +497,7 @@ export const generateFolderShareLink = async (req, res) => {
 
         folder.shared = true;
         folder.sharedUrl = shareLink;
+        folder.sharedBy = userId;
         await folder.save();
 
         return res.status(200).json({
@@ -512,6 +513,83 @@ export const generateFolderShareLink = async (req, res) => {
         });
     }
 };
+export const getSharedFoldersWithFiles = async (req, res) => {
+    try {
+        const userId = req.user._id;
+
+        const folders = await Folder.find({ userId, shared: true });
+
+        const result = [];
+
+        for (const folder of folders) {
+            const files = await File.find({ folderId: folder._id });
+
+            result.push({
+                folder: {
+                    id: folder._id,
+                    name: folder.name,
+                    shared: folder.shared,
+                    sharedUrl: folder.sharedUrl,
+                },
+                files: files.map(file => ({
+                    id: file._id,
+                    fileName: file.fileName,
+                    fileType: file.fileType,
+                    fileSize: file.fileSize,
+                    url: file.url,
+                    shared: file.shared,
+                    sharedUrl: file.sharedUrl
+                }))
+            });
+        }
+
+        return res.status(200).json({
+            message: "✅ تم جلب المجلدات المشتركة مع الملفات بنجاح",
+            folders: result
+        });
+
+    } catch (err) {
+        console.error("Error fetching shared folders and files:", err);
+        return res.status(500).json({
+            message: "❌ حدث خطأ أثناء جلب المجلدات المشتركة",
+            error: err.message
+        });
+    }
+};
+
+
+export const disableFileShare = async (req, res) => {
+    try {
+        const { fileId } = req.params;
+
+        const file = await File.findById(fileId);
+
+        if (!file) {
+            return res.status(404).json({ message: "❌ الملف غير موجود." });
+        }
+
+        // 🔄 إذا الملف غير مشارك → ارجعه مشارك تاني بنفس الرابط السابق
+        if (!file.shared && file.sharedUrl) {
+            file.shared = true;
+            await file.save();
+            return res.status(200).json({
+                message: "✅ تم إعادة تفعيل مشاركة الملف.",
+                shareUrl: file.sharedUrl,
+            });
+        }
+
+        // 🔒 لو الملف مشارك → قم بتعطيل المشاركة
+        file.shared = false;
+        await file.save();
+
+        return res.status(200).json({ message: "✅ تم تعطيل مشاركة الملف." });
+
+    } catch (err) {
+        console.error("Error disabling share:", err);
+        return res.status(500).json({ message: "❌ حدث خطأ أثناء تعطيل المشاركة", error: err.message });
+    }
+};
+  
 
 export const getSharedFolderContent = async (req, res) => {
     try {

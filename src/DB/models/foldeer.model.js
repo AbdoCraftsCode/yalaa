@@ -5,6 +5,8 @@ const folderSchema = new mongoose.Schema({
     userId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
     createdAt: { type: Date, default: Date.now },
     shared: { type: Boolean, default: false }, 
+    sharedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+
     sharedUrl: { type: String, default: null }, 
 });
 

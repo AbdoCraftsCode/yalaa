@@ -377,6 +377,7 @@ export const generateShareLink = async (req, res) => {
         // تحديث الملف
         file.shared = true;
         file.sharedUrl = shareLink;
+        file.sharedBy = userId; 
         await file.save();
 
         return res.status(200).json({
@@ -394,6 +395,20 @@ export const generateShareLink = async (req, res) => {
 };
 
 
+export const getSharedFilesByUser = async (req, res) => {
+    try {
+        const userId = req.user._id;
+        const files = await File.find({ sharedBy: userId }).select('fileName sharedUrl createdAt');
+
+        return res.status(200).json({
+            message: "✅ تم جلب الملفات المشاركة بواسطة المستخدم بنجاح",
+            files
+        });
+    } catch (err) {
+        console.error("Error in getSharedFilesByUser:", err);
+        return res.status(500).json({ message: "❌ فشل في جلب الملفات", error: err.message });
+    }
+};
 
 
 
@@ -837,7 +852,7 @@ export const getUserStorageUsage = async (req, res) => {
 
 
 export const signup = asyncHandelr(async (req, res, next) => {
-    const { username, email, classId, password, confirmationpassword, image, gender,  } = req.body;
+    const { username, email, classId, password, confirmationpassword, image, gender, ref } = req.body;
     console.log(username, email, password);
 
     const checkUser = await dbservice.findOne({ model: Usermodel, filter: { email } });
@@ -862,19 +877,36 @@ export const signup = asyncHandelr(async (req, res, next) => {
         return next(new Error("Failed to generate a unique userId", { cause: 500 }));
     }
 
-
     const hashPassword = generatehash({ planText: password });
 
-
+    // إنشاء الحساب مع تخزين ID المُحيل لو موجود
     const user = await dbservice.create({
         model: Usermodel,
-        data: { username, email, password: hashPassword, userId, image, gender, classId }
+        data: {
+            username,
+            email,
+            password: hashPassword,
+            userId,
+            image,
+            gender,
+            classId,
+            referredBy: ref || null // ✅ إضافة معرف المُحيل
+        }
     });
 
+    // توليد رابط إحالة للمستخدم
+    const referralLink = `https://yourwebsite.com/register?ref=${user._id}`;
+
+    // حفظ رابط الإحالة داخل المستخدم
+    user.referralLink = referralLink;
+    await user.save();
 
     Emailevent.emit("confirmemail", { email });
 
-    return successresponse(res, "User created successfully", 201, );
+    return successresponse(res, {
+        message: "User created successfully",
+        referralLink: referralLink // ✅ ترجيع رابط الإحالة للمستخدم
+    }, 201);
 });
 
 export const updateProfile = asyncHandelr(async (req, res, next) => {

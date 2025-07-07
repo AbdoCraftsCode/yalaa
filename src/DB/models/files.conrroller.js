@@ -37,6 +37,11 @@ const fileSchema = new mongoose.Schema({
         type: Date,
         default: Date.now,
     },
+    sharedBy: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User'
+    }
+    
 });
 
 const File = mongoose.model("File", fileSchema);

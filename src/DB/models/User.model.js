@@ -61,6 +61,9 @@ const userSchema = new mongoose.Schema(
             secure_url: { type: String, }, // الصورة مطلوبة
             public_id: { type: String, }   // مهم لحذف الصور من Cloudinary
         },
+        referredBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
+        referralLink: { type: String },
+
         userId: String,
         emailOTP: String,
         forgetpasswordOTP: String,
