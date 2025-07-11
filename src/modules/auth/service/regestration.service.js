@@ -950,7 +950,7 @@ export const getUserRoleById = asyncHandelr(async (req, res, next) => {
         return res.status(400).json({ message: "Invalid user ID format" });
     }
 
-    const user = await Usermodel.findById(_id).select("role");
+    const user = await Usermodel.findById(_id).select("role referralLink");
 
     if (!user) {
         return res.status(404).json({ message: "User not found" });
@@ -960,6 +960,7 @@ export const getUserRoleById = asyncHandelr(async (req, res, next) => {
         message: "User role fetched successfully",
         data: {
             role: user.role,
+            referralLink: user.referralLink,
         },
     });
 });
