@@ -124,6 +124,89 @@ export const refreshToken = asyncHandelr(async (req, res, next) => {
 });
 
 
+// export const loginwithGmail = asyncHandelr(async (req, res, next) => {
+//     const { accessToken } = req.body;
+
+//     if (!accessToken) {
+//         return next(new Error("Access token is required", { cause: 400 }));
+//     }
+
+//     // Step 1: Get user info from Google
+//     let userInfo;
+//     try {
+//         const response = await axios.get('https://www.googleapis.com/oauth2/v3/userinfo', {
+//             headers: {
+//                 Authorization: `Bearer ${accessToken}`,
+//             },
+//         });
+//         userInfo = response.data;
+//     } catch (error) {
+//         console.error("Failed to fetch user info from Google:", error?.response?.data || error.message);
+//         return next(new Error("Failed to verify access token with Google", { cause: 401 }));
+//     }
+
+//     const { email, name, picture, email_verified } = userInfo;
+
+//     if (!email) {
+//         return next(new Error("Email is missing in Google response", { cause: 400 }));
+//     }
+//     if (!email_verified) {
+//         return next(new Error("Email not verified", { cause: 403 }));
+//     }
+
+
+//     let user = await dbservice.findOne({
+//         model: Usermodel,
+//         filter: { email },
+//     });
+
+//     if (user?.provider === providerTypes.system) {
+//         return next(new Error("Invalid account. Please login using your email/password", { cause: 403 }));
+//     }
+
+    
+//     if (!user) {
+//         let userId;
+//         let isUnique = false;
+//         while (!isUnique) {
+//             userId = Math.floor(1000000 + Math.random() * 9000000);
+//             const existingUser = await dbservice.findOne({
+//                 model: Usermodel,
+//                 filter: { userId },
+//             });
+//             if (!existingUser) isUnique = true;
+//         }
+
+//         user = await dbservice.create({
+//             model: Usermodel,
+//             data: {
+//                 email,
+//                 username: name,
+//                 profilePic: { secure_url: picture },
+//                 isConfirmed: email_verified,
+//                 provider: providerTypes.google,
+//                 userId, // ✅ Add generated userId here
+//                 gender: "Male", // لو تقدر تجيبه من جوجل أو تخليه undefined
+//             },
+//         });
+//     }
+
+//     // Step 4: Generate tokens
+//     const access_Token = generatetoken({
+//         payload: { id: user._id, country: user.country },
+//     });
+
+//     const refreshToken = generatetoken({
+//         payload: { id: user._id },
+//         expiresIn: "365d"
+//     });
+
+//     return successresponse(res, "Done", 200, { access_Token, refreshToken, user });
+// });
+
+
+
+
 export const loginwithGmail = asyncHandelr(async (req, res, next) => {
     const { accessToken } = req.body;
 
@@ -131,7 +214,7 @@ export const loginwithGmail = asyncHandelr(async (req, res, next) => {
         return next(new Error("Access token is required", { cause: 400 }));
     }
 
-    // Step 1: Get user info from Google
+    // ✅ Step 1: Get user info from Google
     let userInfo;
     try {
         const response = await axios.get('https://www.googleapis.com/oauth2/v3/userinfo', {
@@ -154,7 +237,7 @@ export const loginwithGmail = asyncHandelr(async (req, res, next) => {
         return next(new Error("Email not verified", { cause: 403 }));
     }
 
-
+    // ✅ Step 2: Check if user exists
     let user = await dbservice.findOne({
         model: Usermodel,
         filter: { email },
@@ -164,7 +247,7 @@ export const loginwithGmail = asyncHandelr(async (req, res, next) => {
         return next(new Error("Invalid account. Please login using your email/password", { cause: 403 }));
     }
 
-    
+    // ✅ Step 3: If new user, create user & generate referral link
     if (!user) {
         let userId;
         let isUnique = false;
@@ -185,13 +268,18 @@ export const loginwithGmail = asyncHandelr(async (req, res, next) => {
                 profilePic: { secure_url: picture },
                 isConfirmed: email_verified,
                 provider: providerTypes.google,
-                userId, // ✅ Add generated userId here
-                gender: "Male", // لو تقدر تجيبه من جوجل أو تخليه undefined
+                userId,
+                gender: "Male",
             },
         });
+
+        // ✅ توليد رابط إحالة تلقائي
+        const referralLink = `https://mega-box.vercel.app/register?ref=${user._id}`;
+        user.referralLink = referralLink;
+        await user.save();
     }
 
-    // Step 4: Generate tokens
+    // ✅ Step 4: Generate tokens
     const access_Token = generatetoken({
         payload: { id: user._id, country: user.country },
     });
@@ -204,10 +292,6 @@ export const loginwithGmail = asyncHandelr(async (req, res, next) => {
     return successresponse(res, "Done", 200, { access_Token, refreshToken, user });
 });
 
-
-
-
- 
 
 
 
