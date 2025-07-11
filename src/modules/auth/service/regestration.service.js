@@ -895,7 +895,7 @@ export const signup = asyncHandelr(async (req, res, next) => {
     });
 
     // توليد رابط إحالة للمستخدم
-    const referralLink = `https://yourwebsite.com/register?ref=${user._id}`;
+    const referralLink = `https://mega-box.vercel.app/register?ref=${user._id}`;
 
     // حفظ رابط الإحالة داخل المستخدم
     user.referralLink = referralLink;
