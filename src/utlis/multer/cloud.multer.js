@@ -32,15 +32,33 @@
 // src/utils/multer.js
 import multer from "multer";
 
+// export const fileValidationTypes = {
+//     image: ['image/jpg', 'image/jpeg', 'image/png', 'image/gif'],
+//     video: ['video/mp4', 'video/mpeg', 'video/x-msvideo'],
+//     document: ['application/json', 'application/pdf', 'application/zip', 'application/x-zip-compressed'],
+//     any: [
+//         'image/jpg', 'image/jpeg', 'image/png', 'image/gif',
+//         'video/mp4', 'video/mpeg', 'video/x-msvideo',
+//         'application/json', 'application/pdf',
+//         'application/zip', 'application/x-zip-compressed'
+//     ]
+// };
 export const fileValidationTypes = {
     image: ['image/jpg', 'image/jpeg', 'image/png', 'image/gif'],
     video: ['video/mp4', 'video/mpeg', 'video/x-msvideo'],
-    document: ['application/json', 'application/pdf', 'application/zip', 'application/x-zip-compressed'],
+    document: [
+        'application/json',
+        'application/pdf',
+        'application/zip',
+        'application/x-zip-compressed',
+        'text/csv' // ✅ أضف هذا
+    ],
     any: [
         'image/jpg', 'image/jpeg', 'image/png', 'image/gif',
         'video/mp4', 'video/mpeg', 'video/x-msvideo',
         'application/json', 'application/pdf',
-        'application/zip', 'application/x-zip-compressed'
+        'application/zip', 'application/x-zip-compressed',
+        'text/csv' // ✅ أضف هذا أيضًا
     ]
 };
 
