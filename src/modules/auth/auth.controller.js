@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { validation } from "../../middlewere/validation.middlewere.js";
 import  * as validators from "../auth/auth.validate.js"
-import { addQuestion, adduser, confirmOTP, createClass, generateShareLink, createFile, createImages, createSupject, getAllClasses, getAllImages, getAllRanks, GetFriendsList, getMyRank, Getprofiledata, getQuestionsByClassAndSubject, getSharedFile, getSubjectsByClass, getUserFiles, getUserRoleById, getUserStorageUsage, resendOTP, shareFile, signup, signupwithGmail, submitAnswer, incrementFileView, getShareLinkAnalytics, getUserAnalytics, updateProfile, getUserEarnings, deleteFile, updateFileName, withdrawEarnings, getWithdrawalHistory, getAllPromoters, getUserAnalyticsadmin, getUserEarningsadmin, getShareLinkAnalyticsadmin, getSharedFilesByUser } from "./service/regestration.service.js";
+import { addQuestion, adduser, confirmOTP, createClass, generateShareLink, createFile, createImages, createSupject, getAllClasses, getAllImages, getAllRanks, GetFriendsList, getMyRank, Getprofiledata, getQuestionsByClassAndSubject, getSharedFile, getSubjectsByClass, getUserFiles, getUserRoleById, getUserStorageUsage, resendOTP, shareFile, signup, signupwithGmail, submitAnswer, incrementFileView, getShareLinkAnalytics, getUserAnalytics, updateProfile, getUserEarnings, deleteFile, updateFileName, withdrawEarnings, getWithdrawalHistory, getAllPromoters, getUserAnalyticsadmin, getUserEarningsadmin, getShareLinkAnalyticsadmin, getSharedFilesByUser, createCopyrightReport, getAllCopyrightReports } from "./service/regestration.service.js";
 import { deleteUserById, forgetpassword,   login, loginwithGmail, refreshToken, resetpassword, toggleUserBanByOwner } from "./service/authontecation.service.js";
 import { authentication } from "../../middlewere/authontcation.middlewere.js";
 import { fileValidationTypes, uploadCloudFile } from "../../utlis/multer/cloud.multer.js";
@@ -32,6 +32,20 @@ routr.post(
     createFile
 );
 
+routr.post(
+    "/report",
+    authentication(),
+    uploadCloudFile([
+        ...fileValidationTypes.image,
+        ...fileValidationTypes.document,
+        ...fileValidationTypes.video,
+    ]).single("file"),
+    createCopyrightReport
+);
+
+
+
+
 routr.post("/resendOTP", resendOTP)
 
 routr.patch("/updateProfile", authentication(), updateProfile)
@@ -47,6 +61,8 @@ routr.get("/getShareLinkAnalytics", authentication(), getShareLinkAnalytics)
 
 routr.get("/getUserAnalytics", authentication(), getUserAnalytics)
 routr.get("/getUserRoleById/:_id", getUserRoleById)
+routr.get("/getAllCopyrightReports", getAllCopyrightReports)
+
 routr.get("/getSharedFile/:fileId" ,getSharedFile)
 routr.post("/addQuestion", addQuestion)
 routr.post("/submitAnswer", authentication(), submitAnswer)

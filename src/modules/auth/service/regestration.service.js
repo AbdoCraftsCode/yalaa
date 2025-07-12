@@ -27,6 +27,7 @@ import geoip from 'geoip-lite';
 import { getName } from 'country-list';
 import { OwnerViewLog } from "../../../DB/models/OwnerViewLog.js";
 import { WithdrawalLog } from "../../../DB/models/WithdrawalLog.model.js";
+import { CopyrightReportModel } from "../../../DB/models/CopyrightReportSchema.model.js";
 
 // export const signup = asyncHandelr(async (req, res, next) => {
     
@@ -203,6 +204,102 @@ export const createFile = async (req, res) => {
         });
     }
   };
+
+
+export const createCopyrightReport = async (req, res, next) => {
+    try {
+        const userId = req.user._id;
+        const file = req.file;
+        const {
+            type,
+            copyrightOwnerName,
+            relationshipWithContent,
+            email,
+            phoneNumber,
+            country,
+            province,
+            streetAddress,
+            city,
+            postalCode,
+            signature
+        } = req.body;
+
+        if (!file) {
+            return res.status(400).json({ message: "❌ يجب رفع ملف الانتهاك." });
+        }
+
+        // تحديد نوع الملف
+        let resourceType = "raw";
+        if (file.mimetype.startsWith("image/")) resourceType = "image";
+        else if (file.mimetype.startsWith("video/")) resourceType = "video";
+
+        // رفع الملف إلى Cloudinary
+        const uploadResult = await cloud.uploader.upload(file.path, {
+            resource_type: resourceType,
+            folder: "copyright-reports",
+            use_filename: true,
+            unique_filename: false,
+        });
+
+        const fileSizeMB = Math.ceil(file.size / (1024 * 1024));
+
+        // حفظ البيانات كلها في قاعدة البيانات
+        const report = await CopyrightReportModel.create({
+            userId,
+            type,
+            copyrightUrlsFile: uploadResult.secure_url, // نعتبره الملف الرسمي
+            copyrightOwnerName,
+            relationshipWithContent,
+            email,
+            phoneNumber,
+            country,
+            province,
+            streetAddress,
+            city,
+            postalCode,
+            signature,
+            fileName: file.originalname,
+            fileType: file.mimetype,
+            fileSize: fileSizeMB,
+            url: uploadResult.secure_url,
+        });
+
+        // حذف الملف المؤقت من السيرفر
+        fs.unlinkSync(file.path);
+
+        res.status(201).json({
+            message: "✅ تم إرسال البلاغ وحفظ الملف بنجاح.",
+            data: report,
+        });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({
+            message: "❌ حدث خطأ أثناء رفع البلاغ",
+            error: err.message,
+        });
+    }
+};
+
+export const getAllCopyrightReports = async (req, res, next) => {
+    try {
+        const reports = await CopyrightReportModel.find()
+            .populate("userId", "username email") // علشان يجيب بيانات المستخدم اللي رفع البلاغ
+            .sort({ createdAt: -1 }); // الأحدث أولًا
+
+        res.status(200).json({
+            message: "✅ تم جلب جميع البلاغات بنجاح",
+            total: reports.length,
+            data: reports,
+        });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({
+            message: "❌ حدث خطأ أثناء جلب البلاغات",
+            error: err.message,
+        });
+    }
+};
+
 
 export const deleteFile = async (req, res) => {
     try {
