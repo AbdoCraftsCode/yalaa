@@ -4,7 +4,7 @@ import mongoose from "mongoose";
 const CopyrightReportSchema = new mongoose.Schema({
     type: {
         type: String,
-        enum: ["Audio", "Video", "Image", "Document", "Other"],
+        // enum: ["Audio", "Video", "Image", "Document", "Other"],
         required: true,
     },
     copyrightUrlsFile: { type: String, required: true }, // اسم أو رابط الملف المرفوع
