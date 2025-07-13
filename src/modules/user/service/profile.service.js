@@ -126,7 +126,7 @@ export const Getloginuseraccount = asyncHandelr(async (req, res, next) => {
         role: user.role,
         watchingplan: user.watchingplan,
         Downloadsplan: user.Downloadsplan,
-
+        referralLink: user.referralLink,
         profilePic: user.profilePic?.secure_url || null, // يرجع رابط الصورة أو null لو مش موجودة
     });
 });

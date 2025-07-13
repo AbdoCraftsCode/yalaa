@@ -29,6 +29,7 @@ import { OwnerViewLog } from "../../../DB/models/OwnerViewLog.js";
 import { WithdrawalLog } from "../../../DB/models/WithdrawalLog.model.js";
 import { CopyrightReportModel } from "../../../DB/models/CopyrightReportSchema.model.js";
 import withdrawalRequestSchemaModel from "../../../DB/models/withdrawalRequestSchema.model.js";
+import { SavedFile } from "../../../DB/models/savedFileSchema.model.js";
 
 // export const signup = asyncHandelr(async (req, res, next) => {
     
@@ -388,36 +389,109 @@ export const updateFileName = async (req, res) => {
 
 
 
+// export const getUserFiles = async (req, res) => {
+//     try {
+//         const userId = req.user._id;
+//         const { type } = req.query; // مثال: ?type=image أو ?type=video
+
+//         // التحقق إذا فيه نوع محدد
+//         let filter = { userId };
+//         if (type) {
+//             const typeMap = {
+//                 image: ['image/jpg', 'image/jpeg', 'image/png', 'image/gif'],
+//                 video: ['video/mp4', 'video/mpeg', 'video/x-msvideo'],
+//                 document: ['application/pdf', 'application/json'],
+//                 zip: ['application/zip', 'application/x-zip-compressed'],
+//             };
+
+//             const mimeTypes = typeMap[type.toLowerCase()];
+//             if (mimeTypes) {
+//                 filter.fileType = { $in: mimeTypes };
+//             }
+//         }
+
+//         const files = await File.find(filter);
+//         const totalUsed = files.reduce((sum, file) => sum + file.fileSize, 0);
+
+//         res.status(200).json({
+//             files,
+//             totalUsedMB: totalUsed,
+//         });
+//     } catch (err) {
+//         res.status(500).json({ message: '❌ خطأ في جلب الملفات', error: err.message });
+//     }
+// };
+
 export const getUserFiles = async (req, res) => {
     try {
         const userId = req.user._id;
-        const { type } = req.query; // مثال: ?type=image أو ?type=video
+        const { type } = req.query;
 
-        // التحقق إذا فيه نوع محدد
-        let filter = { userId };
-        if (type) {
-            const typeMap = {
-                image: ['image/jpg', 'image/jpeg', 'image/png', 'image/gif'],
-                video: ['video/mp4', 'video/mpeg', 'video/x-msvideo'],
-                document: ['application/pdf', 'application/json'],
-                zip: ['application/zip', 'application/x-zip-compressed'],
-            };
+        const typeMap = {
+            image: ['image/jpg', 'image/jpeg', 'image/png', 'image/gif'],
+            video: ['video/mp4', 'video/mpeg', 'video/x-msvideo'],
+            document: ['application/pdf', 'application/json'],
+            zip: ['application/zip', 'application/x-zip-compressed'],
+        };
 
-            const mimeTypes = typeMap[type.toLowerCase()];
-            if (mimeTypes) {
-                filter.fileType = { $in: mimeTypes };
-            }
+        const mimeTypes = typeMap[type?.toLowerCase()];
+        let myFilter = { userId };
+        if (mimeTypes) {
+            myFilter.fileType = { $in: mimeTypes };
         }
 
-        const files = await File.find(filter);
-        const totalUsed = files.reduce((sum, file) => sum + file.fileSize, 0);
+        const myFiles = await File.find(myFilter);
+        const totalUsed = myFiles.reduce((sum, file) => sum + file.fileSize, 0);
 
-        res.status(200).json({
-            files,
-            totalUsedMB: totalUsed,
+        const savedEntries = await SavedFile.find({ userId }).populate("fileId");
+        const savedFiles = savedEntries
+            .map(e => e.fileId)
+            .filter(file => file && (!mimeTypes || mimeTypes.includes(file.fileType)));
+
+        // دمج الملفات الأصلية والمحفوظة
+        const allFiles = [...myFiles, ...savedFiles];
+
+        return res.status(200).json({
+            files: allFiles,
+            totalUsedMB: totalUsed
         });
+
     } catch (err) {
         res.status(500).json({ message: '❌ خطأ في جلب الملفات', error: err.message });
+    }
+};
+
+
+export const saveFile = async (req, res) => {
+    try {
+        const userId = req.user._id;
+        const { fileId } = req.body;
+
+        if (!fileId) {
+            return res.status(400).json({ message: "❌ يجب إرسال معرف الملف." });
+        }
+
+        const file = await File.findById(fileId);
+        if (!file) {
+            return res.status(404).json({ message: "❌ الملف غير موجود." });
+        }
+
+        // تحقق إذا محفوظ بالفعل
+        const alreadySaved = await SavedFile.findOne({ userId, fileId });
+        if (alreadySaved) {
+            return res.status(200).json({ message: "✅ الملف محفوظ بالفعل" });
+        }
+
+        await SavedFile.create({ userId, fileId });
+
+        res.status(201).json({
+            message: "✅ تم حفظ الملف بنجاح",
+            savedFileId: fileId
+        });
+
+    } catch (err) {
+        console.error("Error saving file:", err);
+        res.status(500).json({ message: "❌ حدث خطأ أثناء الحفظ", error: err.message });
     }
 };
 
