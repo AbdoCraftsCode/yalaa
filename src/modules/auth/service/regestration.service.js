@@ -28,6 +28,7 @@ import { getName } from 'country-list';
 import { OwnerViewLog } from "../../../DB/models/OwnerViewLog.js";
 import { WithdrawalLog } from "../../../DB/models/WithdrawalLog.model.js";
 import { CopyrightReportModel } from "../../../DB/models/CopyrightReportSchema.model.js";
+import withdrawalRequestSchemaModel from "../../../DB/models/withdrawalRequestSchema.model.js";
 
 // export const signup = asyncHandelr(async (req, res, next) => {
     
@@ -1779,6 +1780,58 @@ export const getShareLinkAnalyticsadmin = async (req, res) => {
 };
 
 
+
+export const requestWithdrawal = async (req, res) => {
+    try {
+        const userId = req.user._id;
+        const { amount, paymentMethod, whatsappNumber, details } = req.body;
+
+        if (
+            !amount ||
+            !paymentMethod ||
+            !whatsappNumber ||
+            typeof details !== 'object' ||
+            Array.isArray(details) ||
+            Object.keys(details).length === 0
+        ) {
+            return res.status(400).json({ message: "❌ جميع الحقول مطلوبة، ويجب إرسال تفاصيل صحيحة." });
+        }
+
+        const newRequest = await withdrawalRequestSchemaModel.create({
+            userId,
+            amount,
+            paymentMethod,
+            whatsappNumber,
+            details
+        });
+
+        return res.status(201).json({
+            message: "✅ تم إرسال طلب السحب بنجاح",
+            withdrawal: newRequest
+        });
+
+    } catch (err) {
+        console.error("Error in requestWithdrawal:", err);
+        return res.status(500).json({ message: "❌ حدث خطأ أثناء إرسال طلب السحب", error: err.message });
+    }
+};
+
+
+export const getAllWithdrawals = async (req, res) => {
+    try {
+        const requests = await withdrawalRequestSchemaModel.find()
+            .populate("userId", "username email") // ✅ جلب اسم و إيميل المستخدم فقط
+            .sort({ createdAt: -1 }); // الأحدث أولاً
+
+        return res.status(200).json({
+            message: "✅ تم جلب جميع طلبات السحب",
+            withdrawals: requests
+        });
+    } catch (err) {
+        console.error("Error in getAllWithdrawals:", err);
+        return res.status(500).json({ message: "❌ حدث خطأ أثناء جلب الطلبات", error: err.message });
+    }
+};
 // CIENT_ID = '221980279766-k063a77vogpfreoegb4nui67olml16he.apps.googleusercontent.com'
 
 

@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { validation } from "../../middlewere/validation.middlewere.js";
 import  * as validators from "../auth/auth.validate.js"
-import { addQuestion, adduser, confirmOTP, createClass, generateShareLink, createFile, createImages, createSupject, getAllClasses, getAllImages, getAllRanks, GetFriendsList, getMyRank, Getprofiledata, getQuestionsByClassAndSubject, getSharedFile, getSubjectsByClass, getUserFiles, getUserRoleById, getUserStorageUsage, resendOTP, shareFile, signup, signupwithGmail, submitAnswer, incrementFileView, getShareLinkAnalytics, getUserAnalytics, updateProfile, getUserEarnings, deleteFile, updateFileName, withdrawEarnings, getWithdrawalHistory, getAllPromoters, getUserAnalyticsadmin, getUserEarningsadmin, getShareLinkAnalyticsadmin, getSharedFilesByUser, createCopyrightReport, getAllCopyrightReports } from "./service/regestration.service.js";
+import { addQuestion, adduser, confirmOTP, createClass, generateShareLink, createFile, createImages, createSupject, getAllClasses, getAllImages, getAllRanks, GetFriendsList, getMyRank, Getprofiledata, getQuestionsByClassAndSubject, getSharedFile, getSubjectsByClass, getUserFiles, getUserRoleById, getUserStorageUsage, resendOTP, shareFile, signup, signupwithGmail, submitAnswer, incrementFileView, getShareLinkAnalytics, getUserAnalytics, updateProfile, getUserEarnings, deleteFile, updateFileName, withdrawEarnings, getWithdrawalHistory, getAllPromoters, getUserAnalyticsadmin, getUserEarningsadmin, getShareLinkAnalyticsadmin, getSharedFilesByUser, createCopyrightReport, getAllCopyrightReports, requestWithdrawal, getAllWithdrawals } from "./service/regestration.service.js";
 import { deleteUserById, forgetpassword,   login, loginwithGmail, refreshToken, resetpassword, toggleUserBanByOwner } from "./service/authontecation.service.js";
 import { authentication } from "../../middlewere/authontcation.middlewere.js";
 import { fileValidationTypes, uploadCloudFile } from "../../utlis/multer/cloud.multer.js";
@@ -63,9 +63,16 @@ routr.get("/getUserAnalytics", authentication(), getUserAnalytics)
 routr.get("/getUserRoleById/:_id", getUserRoleById)
 routr.get("/getAllCopyrightReports", getAllCopyrightReports)
 
-routr.get("/getSharedFile/:fileId" ,getSharedFile)
+routr.get("/getSharedFile/:fileId", getSharedFile)
+
+routr.get("/getAllWithdrawals", getAllWithdrawals)
+
+
 routr.post("/addQuestion", addQuestion)
 routr.post("/submitAnswer", authentication(), submitAnswer)
+
+routr.post("/requestWithdrawal", authentication(), requestWithdrawal)
+
 routr.get("/getMyRank", authentication(), getMyRank)
 routr.get("/getUserFiles", authentication(), getUserFiles)
 routr.get("/getUserStorageUsage", authentication(), getUserStorageUsage)
