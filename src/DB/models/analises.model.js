@@ -42,6 +42,15 @@ const FileShareAnalyticsSchema = new mongoose.Schema({
         default: 0
     },
 
+    promoterRewards: [
+        {
+            promoterId: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+            amount: Number,
+            createdAt: Date
+        }
+    ],
+
+
     totalEarnings: {
         type: Number,
         default: 0

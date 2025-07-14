@@ -585,6 +585,124 @@ export const getSharedFilesByUser = async (req, res) => {
 
 
 
+// export const getSharedFile = async (req, res) => {
+//     try {
+//         const { fileId } = req.params;
+
+//         if (!fileId) {
+//             return res.status(400).json({ message: "❌ يجب إرسال معرف الملف." });
+//         }
+
+//         const file = await File.findById(fileId).populate("userId", "username email");
+
+//         if (!file || !file.shared) {
+//             return res.status(404).json({ message: "❌ الملف غير موجود أو لم يتم مشاركته." });
+//         }
+
+//         // 🔍 استخراج IP
+//         const ip =
+//             req.headers['x-forwarded-for']?.split(',')[0] ||
+//             req.connection?.remoteAddress ||
+//             req.socket?.remoteAddress ||
+//             '0.0.0.0';
+
+//         // 🔍 الدولة من الـ IP
+//         const geo = geoip.lookup(ip);
+//         const countryCode = geo?.country || 'Unknown';
+//         const country = countryCode;
+
+//         const pricePerView = countryPricing[countryCode] || countryPricing.DEFAULT;
+
+//         // 🕒 تحقق إن الزائر ما شافش ملفات نفس المالك خلال 24 ساعة
+//         const now = new Date();
+//         const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+
+//         const alreadyViewed = await OwnerViewLog.findOne({
+//             ownerId: file.userId._id,
+//             ip,
+//             viewedAt: { $gte: yesterday }
+//         });
+
+//         if (!alreadyViewed) {
+//             // ✅ تسجيل المشاهدة في سجل المالك
+//             await OwnerViewLog.create({
+//                 ownerId: file.userId._id,
+//                 ip,
+//                 viewedAt: now
+//             });
+
+//             // ✅ تحديث أو إنشاء تحليلات الملف
+//             const existingDoc = await FileShareAnalytics.findOne({ fileId });
+
+//             if (!existingDoc) {
+//                 await FileShareAnalytics.create({
+//                     fileId,
+//                     downloads: 0,
+//                     views: 1,
+//                     earnings: pricePerView,
+//                     lastUpdated: now,
+//                     viewers: [{ country, views: 1, earnings: pricePerView }],
+//                     pendingRewards: [{ amount: pricePerView, createdAt: now }] // ✅ إضافه جديدة
+//                 });
+//             } else {
+//                 const viewerIndex = existingDoc.viewers.findIndex(v => v.country === country);
+
+//                 if (viewerIndex !== -1) {
+//                     await FileShareAnalytics.updateOne(
+//                         { fileId, [`viewers.${viewerIndex}.country`]: country },
+//                         {
+//                             $inc: {
+//                                 views: 1,
+//                                 earnings: pricePerView,
+//                                 [`viewers.${viewerIndex}.views`]: 1,
+//                                 [`viewers.${viewerIndex}.earnings`]: pricePerView
+//                             },
+//                             $set: { lastUpdated: now },
+//                             $push: { pendingRewards: { amount: pricePerView, createdAt: now } } // ✅ إضافه جديدة
+//                         }
+//                     );
+//                 } else {
+//                     await FileShareAnalytics.updateOne(
+//                         { fileId },
+//                         {
+//                             $inc: { views: 1, earnings: pricePerView },
+//                             $set: { lastUpdated: now },
+//                             $push: {
+//                                 viewers: { country, views: 1, earnings: pricePerView },
+//                                 pendingRewards: { amount: pricePerView, createdAt: now } // ✅ إضافه جديدة
+//                             }
+//                         }
+//                     );
+//                 }
+//             }
+//         } else {
+//             console.log("⛔️ نفس الزائر شاهد ملف لهذا المالك خلال آخر 24 ساعة، لن تُحتسب المشاهدة.");
+//         }
+
+//         // ✅ إرسال بيانات الملف للعرض
+//         return res.status(200).json({
+//             message: "✅ تم جلب الملف بنجاح",
+//             file: {
+//                 id: file._id,
+//                 name: file.fileName,
+//                 type: file.fileType,
+//                 size: file.fileSize,
+//                 url: file.url,
+//                 sharedBy: {
+//                     username: file.userId.username,
+//                     email: file.userId.email,
+//                 },
+//                 createdAt: file.createdAt,
+//             }
+//         });
+
+//     } catch (err) {
+//         console.error("Error in getSharedFile:", err);
+//         return res.status(500).json({ message: "❌ حدث خطأ أثناء جلب الملف", error: err.message });
+//     }
+// };
+
+
 export const getSharedFile = async (req, res) => {
     try {
         const { fileId } = req.params;
@@ -599,21 +717,18 @@ export const getSharedFile = async (req, res) => {
             return res.status(404).json({ message: "❌ الملف غير موجود أو لم يتم مشاركته." });
         }
 
-        // 🔍 استخراج IP
         const ip =
             req.headers['x-forwarded-for']?.split(',')[0] ||
             req.connection?.remoteAddress ||
             req.socket?.remoteAddress ||
             '0.0.0.0';
 
-        // 🔍 الدولة من الـ IP
         const geo = geoip.lookup(ip);
         const countryCode = geo?.country || 'Unknown';
         const country = countryCode;
 
         const pricePerView = countryPricing[countryCode] || countryPricing.DEFAULT;
 
-        // 🕒 تحقق إن الزائر ما شافش ملفات نفس المالك خلال 24 ساعة
         const now = new Date();
         const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000);
 
@@ -624,15 +739,23 @@ export const getSharedFile = async (req, res) => {
         });
 
         if (!alreadyViewed) {
-            // ✅ تسجيل المشاهدة في سجل المالك
             await OwnerViewLog.create({
                 ownerId: file.userId._id,
                 ip,
                 viewedAt: now
             });
 
-            // ✅ تحديث أو إنشاء تحليلات الملف
             const existingDoc = await FileShareAnalytics.findOne({ fileId });
+
+            // ✅ إضافة مكافأة المُحيل إن وُجد
+            const fileOwner = await Usermodel.findById(file.userId);
+            const promoterReward = fileOwner?.referredBy
+                ? {
+                    promoterId: fileOwner.referredBy,
+                    amount: pricePerView * 0.2,
+                    createdAt: now,
+                }
+                : null;
 
             if (!existingDoc) {
                 await FileShareAnalytics.create({
@@ -642,44 +765,31 @@ export const getSharedFile = async (req, res) => {
                     earnings: pricePerView,
                     lastUpdated: now,
                     viewers: [{ country, views: 1, earnings: pricePerView }],
-                    pendingRewards: [{ amount: pricePerView, createdAt: now }] // ✅ إضافه جديدة
+                    pendingRewards: [{ amount: pricePerView, createdAt: now }],
+                    ...(promoterReward && { promoterRewards: [promoterReward] }),
                 });
             } else {
                 const viewerIndex = existingDoc.viewers.findIndex(v => v.country === country);
+                const updateQuery = {
+                    $inc: { views: 1, earnings: pricePerView },
+                    $set: { lastUpdated: now },
+                    $push: {
+                        pendingRewards: { amount: pricePerView, createdAt: now },
+                        ...(promoterReward && { promoterRewards: promoterReward }),
+                    },
+                };
 
                 if (viewerIndex !== -1) {
-                    await FileShareAnalytics.updateOne(
-                        { fileId, [`viewers.${viewerIndex}.country`]: country },
-                        {
-                            $inc: {
-                                views: 1,
-                                earnings: pricePerView,
-                                [`viewers.${viewerIndex}.views`]: 1,
-                                [`viewers.${viewerIndex}.earnings`]: pricePerView
-                            },
-                            $set: { lastUpdated: now },
-                            $push: { pendingRewards: { amount: pricePerView, createdAt: now } } // ✅ إضافه جديدة
-                        }
-                    );
+                    updateQuery.$inc[`viewers.${viewerIndex}.views`] = 1;
+                    updateQuery.$inc[`viewers.${viewerIndex}.earnings`] = pricePerView;
                 } else {
-                    await FileShareAnalytics.updateOne(
-                        { fileId },
-                        {
-                            $inc: { views: 1, earnings: pricePerView },
-                            $set: { lastUpdated: now },
-                            $push: {
-                                viewers: { country, views: 1, earnings: pricePerView },
-                                pendingRewards: { amount: pricePerView, createdAt: now } // ✅ إضافه جديدة
-                            }
-                        }
-                    );
+                    updateQuery.$push.viewers = { country, views: 1, earnings: pricePerView };
                 }
+
+                await FileShareAnalytics.updateOne({ fileId }, updateQuery);
             }
-        } else {
-            console.log("⛔️ نفس الزائر شاهد ملف لهذا المالك خلال آخر 24 ساعة، لن تُحتسب المشاهدة.");
         }
 
-        // ✅ إرسال بيانات الملف للعرض
         return res.status(200).json({
             message: "✅ تم جلب الملف بنجاح",
             file: {
@@ -701,6 +811,8 @@ export const getSharedFile = async (req, res) => {
         return res.status(500).json({ message: "❌ حدث خطأ أثناء جلب الملف", error: err.message });
     }
 };
+
+
 
 
 
