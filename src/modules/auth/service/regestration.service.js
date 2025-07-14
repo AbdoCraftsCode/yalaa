@@ -98,43 +98,202 @@ export const processPendingRewards = async () => {
     console.log("✅ تمت معالجة المكافآت غير المرصودة إلى مرصودة");
   };
   
+// export const getUserEarnings = async (req, res) => {
+//     try {
+//         const userId = req.user._id;
+
+//         const files = await File.find({ userId, shared: true }).select('_id');
+
+//         const fileIds = files.map(f => f._id);
+
+//         const analytics = await FileShareAnalytics.find({ fileId: { $in: fileIds } });
+
+//         let pending = 0;
+//         let confirmed = 0;
+//         let withdrawn = 0;
+
+//         const now = new Date();
+
+//         for (const record of analytics) {
+//             withdrawn += record.totalEarnings || 0;
+//             confirmed += record.confirmedRewards || 0;
+
+//             for (const pendingReward of record.pendingRewards || []) {
+//                 const createdAt = new Date(pendingReward.createdAt);
+//                 const daysPassed = (now - createdAt) / (1000 * 60 * 60 * 24);
+
+//                 if (daysPassed < 3) {
+//                     pending += pendingReward.amount;
+//                 } else {
+//                     confirmed += pendingReward.amount;
+//                 }
+//             }
+//         }
+
+//         return res.status(200).json({
+//             message: "✅ تفاصيل الأرباح",
+//             pendingRewards: pending.toFixed(6),
+//             confirmedRewards: confirmed.toFixed(6),
+//             totalEarnings: withdrawn.toFixed(6),
+//             currency: "USD"
+//         });
+
+//     } catch (err) {
+//         console.error("Error:", err);
+//         return res.status(500).json({ message: "❌ حدث خطأ", error: err.message });
+//     }
+//     };
+
+// export const getUserEarnings = async (req, res) => {
+//     try {
+//         const userId = req.user._id;
+
+//         const files = await File.find({ userId, shared: true }).select('_id');
+//         const fileIds = files.map(f => f._id);
+
+//         const analytics = await FileShareAnalytics.find({
+//             $or: [
+//                 { fileId: { $in: fileIds } },                        // أرباحي أنا
+//                 { "promoterRewards.promoterId": userId }             // أنا مُحيل
+//             ]
+//         });
+
+//         let pending = 0;
+//         let confirmed = 0;
+//         let withdrawn = 0;
+//         let promoterEarnings = 0;
+
+//         const now = new Date();
+
+//         for (const record of analytics) {
+//             if (fileIds.includes(record.fileId?.toString() || record.fileId)) {
+//                 withdrawn += record.totalEarnings || 0;
+//                 confirmed += record.confirmedRewards || 0;
+
+//                 for (const pendingReward of record.pendingRewards || []) {
+//                     const createdAt = new Date(pendingReward.createdAt);
+//                     const daysPassed = (now - createdAt) / (1000 * 60 * 60 * 24);
+
+//                     if (daysPassed < 3) {
+//                         pending += pendingReward.amount;
+//                     } else {
+//                         confirmed += pendingReward.amount;
+//                     }
+//                 }
+//             }
+
+//             // ✅ حساب مكافآت المُحيل
+//             for (const reward of record.promoterRewards || []) {
+//                 if (reward.promoterId?.toString() === userId.toString()) {
+//                     promoterEarnings += reward.amount || 0;
+//                 }
+//             }
+//         }
+
+//         return res.status(200).json({
+//             message: "✅ تفاصيل الأرباح",
+//             pendingRewards: pending.toFixed(6),
+//             confirmedRewards: confirmed.toFixed(6),
+//             totalEarnings: withdrawn.toFixed(6),
+//             promoterEarnings: promoterEarnings.toFixed(6),
+//             currency: "USD"
+//         });
+
+//     } catch (err) {
+//         console.error("Error:", err);
+//         return res.status(500).json({ message: "❌ حدث خطأ", error: err.message });
+//     }
+// };
+
+
 export const getUserEarnings = async (req, res) => {
     try {
         const userId = req.user._id;
 
         const files = await File.find({ userId, shared: true }).select('_id');
+        const fileIds = files.map(f => f._id.toString());
 
-        const fileIds = files.map(f => f._id);
-
-        const analytics = await FileShareAnalytics.find({ fileId: { $in: fileIds } });
+        const analytics = await FileShareAnalytics
+            .find({
+                $or: [
+                    { fileId: { $in: fileIds } },
+                    { "promoterRewards.promoterId": userId }
+                ]
+            })
+            .populate("fileId");
 
         let pending = 0;
         let confirmed = 0;
         let withdrawn = 0;
+        let promoterEarnings = 0;
+
+        // map لكل مستخدم محال => earnings
+        const promoterDetailsMap = new Map();
 
         const now = new Date();
 
         for (const record of analytics) {
-            withdrawn += record.totalEarnings || 0;
-            confirmed += record.confirmedRewards || 0;
+            const isMyFile = fileIds.includes(record.fileId?._id?.toString());
 
-            for (const pendingReward of record.pendingRewards || []) {
-                const createdAt = new Date(pendingReward.createdAt);
-                const daysPassed = (now - createdAt) / (1000 * 60 * 60 * 24);
+            if (isMyFile) {
+                withdrawn += record.totalEarnings || 0;
+                confirmed += record.confirmedRewards || 0;
 
-                if (daysPassed < 3) {
-                    pending += pendingReward.amount;
-                } else {
-                    confirmed += pendingReward.amount;
+                for (const pendingReward of record.pendingRewards || []) {
+                    const createdAt = new Date(pendingReward.createdAt);
+                    const daysPassed = (now - createdAt) / (1000 * 60 * 60 * 24);
+
+                    if (daysPassed < 3) {
+                        pending += pendingReward.amount;
+                    } else {
+                        confirmed += pendingReward.amount;
+                    }
+                }
+            }
+
+            // مكافآت المُحيل
+            for (const reward of record.promoterRewards || []) {
+                if (reward.promoterId?.toString() === userId.toString()) {
+                    promoterEarnings += reward.amount || 0;
+
+                    const fileOwnerId = record.fileId?.userId;
+                    if (fileOwnerId) {
+                        const existing = promoterDetailsMap.get(fileOwnerId.toString()) || {
+                            userId: fileOwnerId.toString(),
+                            totalViews: 0,
+                            totalPromoterEarningsFromUser: 0
+                        };
+                        existing.totalPromoterEarningsFromUser += reward.amount;
+                        promoterDetailsMap.set(fileOwnerId.toString(), existing);
+                    }
                 }
             }
         }
+
+        // جلب بيانات المستخدمين الذين قمت بإحالتهم
+        const referredUserIds = [...promoterDetailsMap.keys()];
+        const referredUsers = await Usermodel.find({
+            _id: { $in: referredUserIds }
+        }).select("username email");
+
+        // دمج البيانات
+        const promoterDetails = referredUsers.map(user => {
+            const stats = promoterDetailsMap.get(user._id.toString());
+            return {
+                userId: user._id,
+                username: user.username,
+                email: user.email,
+                totalPromoterEarningsFromUser: stats.totalPromoterEarningsFromUser.toFixed(6)
+            };
+        });
 
         return res.status(200).json({
             message: "✅ تفاصيل الأرباح",
             pendingRewards: pending.toFixed(6),
             confirmedRewards: confirmed.toFixed(6),
             totalEarnings: withdrawn.toFixed(6),
+            promoterEarnings: promoterEarnings.toFixed(6),
+            promoterDetails,
             currency: "USD"
         });
 
@@ -142,9 +301,7 @@ export const getUserEarnings = async (req, res) => {
         console.error("Error:", err);
         return res.status(500).json({ message: "❌ حدث خطأ", error: err.message });
     }
-    };
-
-
+};
 
 export const createFile = async (req, res) => {
     try {
