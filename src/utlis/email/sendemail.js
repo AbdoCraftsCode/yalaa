@@ -1,85 +1,34 @@
-import nodemailer from "nodemailer"
-
-
-
+import SibApiV3Sdk from "sib-api-v3-sdk";
 
 export const sendemail = async ({
     to = [],
     subject = "",
     text = "",
     html = "",
-    attachments = [],
-
-
 } = {}) => {
+    try {
+        let defaultClient = SibApiV3Sdk.ApiClient.instance;
+        let apiKey = defaultClient.authentications["api-key"];
+        apiKey.apiKey = process.env.BREVO_API_KEY; // 👈 مفتاح API من Brevo
 
+        let apiInstance = new SibApiV3Sdk.TransactionalEmailsApi();
 
+        // تأكد أن to Array
+        const recipients = (Array.isArray(to) ? to : [to]).map((email) => ({ email }));
 
+        let sendSmtpEmail = {
+            sender: { email: process.env.SENDER_EMAIL, name: "Fedk 👻" },
+            to: recipients,
+            subject: subject || "No Subject",
+            textContent: text || " ",
+            htmlContent: html || `<p>${text || "No Content"}</p>`,
+        };
 
-    const transporter = nodemailer.createTransport({
-        service: 'gmail',
-        auth: {
-            user: process.env.EMAIL,
-            pass: process.env.EMAIL_PASSWORD,
-        },
-        
-
-            tls: {
-                rejectUnauthorized: false // 💥 ده بيسمح باستخدام شهادات SSL موقعة ذاتيًا
-            }
-        
-    });
-
-
-
-    const info = await transporter.sendMail({
-        from: `"yallabina 👻" <${process.env.EMAIL}>`,
-        to,
-        subject,
-        text,
-        html,
-        attachments,
-    });
-
-
-
-}
-
-
-
-// import nodemailer from "nodemailer";
-
-// export const sendemail = async ({
-//     to = [],
-//     subject = "",
-//     text = "",
-//     html = "",
-//     attachments = [],
-// } = {}) => {
-//     const transporter = nodemailer.createTransport({
-//         host: "smtp.mailersend.net",
-//         port: 587, // أو 2525
-//         secure: false, // true لو كنت هتستخدم port 465
-//         auth: {
-//             user: process.env.SMTP_USER, // SMTP username
-//             pass: process.env.SMTP_PASS, // SMTP password
-//         },
-//         tls: {
-//             rejectUnauthorized: false, // لحل مشكلة الشهادة في بيئات التطوير
-//         },
-//     });
-
-//     const info = await transporter.sendMail({
-//         from: `"YallaBina 👻" <${process.env.SENDER_EMAIL}>`, // لازم يكون من دومينك
-//         to,
-//         subject,
-//         text,
-//         html,
-//         attachments,
-//     });
-
-//     console.log("✅ الإيميل تم إرساله:", info.messageId);
-// };
-
-
-
+        let data = await apiInstance.sendTransacEmail(sendSmtpEmail);
+        console.log("✅ Email sent via API:", data);
+        return data;
+    } catch (error) {
+        console.error("❌ Email send error:", error.response?.text || error.message || error);
+        throw error;
+    }
+};

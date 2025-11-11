@@ -7,7 +7,9 @@ import {  decodedToken,  generatetoken,  tokenTypes } from "../../../utlis/secur
 import { Emailevent } from "../../../utlis/events/email.emit.js";
 import { OAuth2Client } from "google-auth-library";
 import axios from 'axios';
-import { nanoid } from 'nanoid';
+import { nanoid, customAlphabet } from "nanoid";
+import { vervicaionemailtemplet } from "../../../utlis/temblete/vervication.email.js";
+import { sendemail } from "../../../utlis/email/sendemail.js";
 export const login = asyncHandelr(async (req, res, next) => {
     const { email, password } = req.body;
     console.log(email, password);
@@ -122,6 +124,8 @@ export const refreshToken = asyncHandelr(async (req, res, next) => {
     // 8. إرجاع الرد الناجح
     return successresponse(res, "Token refreshed successfully", 200, { accessToken, refreshToken: newRefreshToken });
 });
+
+
 
 
 // export const loginwithGmail = asyncHandelr(async (req, res, next) => {
@@ -301,43 +305,124 @@ export const forgetpassword = asyncHandelr(async (req, res, next) => {
     const { email } = req.body;
     console.log(email);
 
-    const checkUser = await Usermodel.findOne({ email });
-    if (!checkUser) {
-        return next(new Error("User not found", { cause: 404 }));
+    // ✅ التحقق من إدخال البريد الإلكتروني
+    if (!email) {
+        return next(new Error("❌ يجب إدخال البريد الإلكتروني", { cause: 400 }));
     }
 
-    Emailevent.emit("forgetpassword", { email })
+    // ✅ البحث عن المستخدم بالبريد
+    const checkUser = await Usermodel.findOne({ email });
+    if (!checkUser) {
+        return next(new Error("❌ المستخدم غير موجود", { cause: 404 }));
+    }
 
-    return successresponse(res);
+    try {
+        // ✅ توليد كود OTP من 4 أرقام
+        const otp = customAlphabet("0123456789", 6)();
+
+        // ✅ إنشاء قالب البريد
+        const html = vervicaionemailtemplet({ code: otp });
+
+        // ✅ تشفير الكود
+        const hashedOtp = await generatehash({ planText: otp });
+
+        // ✅ تحديد مدة صلاحية الكود (10 دقائق)
+        const otpExpiresAt = new Date(Date.now() + 10 * 60 * 1000);
+
+        // ✅ حفظ بيانات الـ OTP في المستخدم
+        await Usermodel.updateOne(
+            { _id: checkUser._id },
+            { emailOTP: hashedOtp, otpExpiresAt, attemptCount: 0 }
+        );
+
+        // ✅ إرسال الإيميل بالكود
+        await sendemail({
+            to: email,
+            subject: "🔐 استعادة كلمة المرور",
+            text: "رمز استعادة كلمة المرور",
+            html,
+        });
+
+        console.log(`📩 تم إرسال كود استعادة كلمة المرور إلى البريد: ${email}`);
+
+        return res.json({
+            success: true,
+            message: "✅ تم إرسال كود التحقق إلى البريد الإلكتروني",
+            user: checkUser,
+        });
+    } catch (error) {
+        console.error("❌ فشل في إرسال كود عبر البريد:", error.message);
+        return res.status(500).json({
+            success: false,
+            error: "❌ فشل في إرسال كود التحقق عبر البريد",
+            details: error.message,
+        });
+    }
 });
 
 
 export const resetpassword = asyncHandelr(async (req, res, next) => {
-    const { email, password, code } = req.body;
-    console.log(email, password, code);
+    const { email, code, password } = req.body;
 
-    const checkUser = await Usermodel.findOne({ email });
-    if (!checkUser) {
-        return next(new Error("User not found", { cause: 404 }));
+    // ✅ التحقق من وجود البيانات المطلوبة
+    if (!email || !code || !password) {
+        return next(new Error("❌ برجاء إدخال البريد الإلكتروني + كود التحقق + كلمة المرور الجديدة", { cause: 400 }));
     }
 
-    if (!comparehash({ planText: code, valuehash: checkUser.forgetpasswordOTP })) {
-
-        return next(new Error("code not match", { cause: 404 }));
+    // ✅ البحث عن المستخدم بالبريد
+    const user = await Usermodel.findOne({ email });
+    if (!user) {
+        return next(new Error("❌ المستخدم غير موجود", { cause: 404 }));
     }
 
-    const hashpassword = generatehash({ planText: password })
-    await Usermodel.updateOne({ email }, {
+    // ✅ التأكد أن هناك كود تحقق تم إرساله مسبقًا
+    if (!user.emailOTP) {
+        return next(new Error("❌ لم يتم إرسال كود تحقق لهذا الحساب", { cause: 400 }));
+    }
 
-        password: hashpassword,
-        isConfirmed: true,
-        changeCredentialTime: Date.now(),
-        $unset: { forgetpasswordOTP: 0, otpExpiresAt: 0, attemptCount: 0 },
+    // ✅ التأكد من أن الكود لم تنتهِ صلاحيته
+    if (Date.now() > new Date(user.otpExpiresAt).getTime()) {
+        return next(new Error("❌ انتهت صلاحية كود التحقق", { cause: 400 }));
+    }
 
-    })
+    // ✅ مقارنة الكود المدخل بالكود المشفر
+    const isValidOTP = await comparehash({ planText: `${code}`, valuehash: user.emailOTP });
+    if (!isValidOTP) {
+        // ⚠️ في حالة الخطأ، يتم زيادة عدد المحاولات
+        const attempts = (user.attemptCount || 0) + 1;
+        if (attempts >= 5) {
+            await Usermodel.updateOne({ email }, {
+                blockUntil: new Date(Date.now() + 2 * 60 * 1000), // حظر مؤقت لمدة دقيقتين
+                attemptCount: 0,
+            });
+            return next(new Error("🚫 تم حظرك مؤقتًا بعد محاولات خاطئة كثيرة", { cause: 429 }));
+        }
 
-    return successresponse(res);
+        await Usermodel.updateOne({ email }, { attemptCount: attempts });
+        return next(new Error("❌ كود التحقق غير صحيح", { cause: 400 }));
+    }
+
+    // ✅ الكود صحيح — تحديث كلمة المرور
+    const hashedPassword = await generatehash({ planText: password });
+
+    await Usermodel.updateOne(
+        { _id: user._id },
+        {
+            password: hashedPassword,
+            isConfirmed: true,
+            changeCredentialTime: Date.now(),
+            $unset: {
+                emailOTP: 0,
+                otpExpiresAt: 0,
+                attemptCount: 0,
+                blockUntil: 0,
+            },
+        }
+    );
+
+    return successresponse(res, "✅ تم تغيير كلمة المرور بنجاح عبر البريد الإلكتروني", 200);
 });
+
 
 
 export const toggleUserBanByOwner = asyncHandelr(async (req, res, next) => {

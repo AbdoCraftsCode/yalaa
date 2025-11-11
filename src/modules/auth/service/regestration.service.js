@@ -14,7 +14,8 @@ import { SubjectModel } from "../../../DB/models/supject.model.js";
 import { RankModel } from "../../../DB/models/rank.model.js";
 // import { PointModel } from "../../../DB/models/points.model.js";
 import { AnswerModel } from "../../../DB/models/anser.model.js";
-import { nanoid } from 'nanoid';
+import { nanoid, customAlphabet } from "nanoid";
+// import { nanoid } from 'nanoid';
 import bcrypt from "bcrypt"
 import File from "../../../DB/models/files.conrroller.js";
 // import admin from 'firebase-admin';
@@ -30,6 +31,8 @@ import { WithdrawalLog } from "../../../DB/models/WithdrawalLog.model.js";
 import { CopyrightReportModel } from "../../../DB/models/CopyrightReportSchema.model.js";
 import withdrawalRequestSchemaModel from "../../../DB/models/withdrawalRequestSchema.model.js";
 import { SavedFile } from "../../../DB/models/savedFileSchema.model.js";
+import { sendemail } from "../../../utlis/email/sendemail.js";
+import { vervicaionemailtemplet } from "../../../utlis/temblete/vervication.email.js";
 
 // export const signup = asyncHandelr(async (req, res, next) => {
     
@@ -1292,19 +1295,98 @@ export const getUserStorageUsage = async (req, res) => {
 
 
 
+// export const signup = asyncHandelr(async (req, res, next) => {
+//     const { username, email, classId, password, confirmationpassword, image, gender, ref } = req.body;
+//     console.log(username, email, password);
+
+//     const checkUser = await dbservice.findOne({ model: Usermodel, filter: { email } });
+//     if (checkUser) {
+//         return next(new Error("email already exists", { cause: 404 }));
+//     }
+
+//     if (password !== confirmationpassword) {
+//         return next(new Error("Passwords do not match", { cause: 400 }));
+//     }
+
+//     let userId;
+//     let isUnique = false;
+//     while (!isUnique) {
+//         userId = Math.floor(1000000 + Math.random() * 9000000);
+
+//         const existingUser = await dbservice.findOne({ model: Usermodel, filter: { userId } });
+//         if (!existingUser && userId !== null) isUnique = true;
+//     }
+
+//     if (!userId) {
+//         return next(new Error("Failed to generate a unique userId", { cause: 500 }));
+//     }
+
+//     const hashPassword = generatehash({ planText: password });
+
+//     // إنشاء الحساب مع تخزين ID المُحيل لو موجود
+//     const user = await dbservice.create({
+//         model: Usermodel,
+//         data: {
+//             username,
+//             email,
+//             password: hashPassword,
+//             userId,
+//             image,
+//             gender,
+//             classId,
+//             referredBy: ref || null // ✅ إضافة معرف المُحيل
+//         }
+//     });
+
+//     // توليد رابط إحالة للمستخدم
+//     const referralLink = `https://mega-box.vercel.app/register?ref=${user._id}`;
+
+//     // حفظ رابط الإحالة داخل المستخدم
+//     user.referralLink = referralLink;
+//     await user.save();
+
+//     Emailevent.emit("confirmemail", { email });
+
+//     return successresponse(res, {
+//         message: "User created successfully",
+//         referralLink: referralLink // ✅ ترجيع رابط الإحالة للمستخدم
+//     }, 201);
+// });
+
+
+
+
+
+
 export const signup = asyncHandelr(async (req, res, next) => {
-    const { username, email, classId, password, confirmationpassword, image, gender, ref } = req.body;
+    const { username, email, classId, password, confirmationpassword, image, gender, ref, phone } = req.body;
     console.log(username, email, password);
 
-    const checkUser = await dbservice.findOne({ model: Usermodel, filter: { email } });
+    // ✅ التحقق من وجود المستخدم بالإيميل أو الهاتف
+    const checkUser = await dbservice.findOne({
+        model: Usermodel,
+        filter: {
+            $or: [
+                ...(email ? [{ email }] : []),
+                ...(phone ? [{ phone }] : [])
+            ]
+        }
+    });
+
     if (checkUser) {
-        return next(new Error("email already exists", { cause: 404 }));
+        if (checkUser.email === email) {
+            return next(new Error("email already exists", { cause: 404 }));
+        }
+        if (checkUser.phone === phone) {
+            return next(new Error("phone already exists", { cause: 404 }));
+        }
     }
 
     if (password !== confirmationpassword) {
         return next(new Error("Passwords do not match", { cause: 400 }));
     }
 
+    // ✅ توليد userId فريد
     let userId;
     let isUnique = false;
     while (!isUnique) {
@@ -1320,35 +1402,81 @@ export const signup = asyncHandelr(async (req, res, next) => {
 
     const hashPassword = generatehash({ planText: password });
 
-    // إنشاء الحساب مع تخزين ID المُحيل لو موجود
+    // ✅ إنشاء الحساب مع ref لو موجود
     const user = await dbservice.create({
         model: Usermodel,
         data: {
             username,
             email,
+            phone,
             password: hashPassword,
             userId,
             image,
             gender,
             classId,
-            referredBy: ref || null // ✅ إضافة معرف المُحيل
+            referredBy: ref || null
         }
     });
 
-    // توليد رابط إحالة للمستخدم
+    // ✅ توليد رابط الإحالة
     const referralLink = `https://mega-box.vercel.app/register?ref=${user._id}`;
-
-    // حفظ رابط الإحالة داخل المستخدم
     user.referralLink = referralLink;
     await user.save();
 
-    Emailevent.emit("confirmemail", { email });
+    // ✅ إرسال OTP
+    try {
+        if (phone) {
+            await sendOTP(phone);
+            console.log(`📩 OTP تم إرساله إلى الهاتف: ${phone}`);
+        }
+        else if (email) {
+            const otp = customAlphabet("0123456789", 6)();
+            const html = vervicaionemailtemplet({ code: otp });
 
-    return successresponse(res, {
-        message: "User created successfully",
-        referralLink: referralLink // ✅ ترجيع رابط الإحالة للمستخدم
-    }, 201);
+            const emailOTP = await generatehash({ planText: `${otp}` });
+            const otpExpiresAt = new Date(Date.now() + 10 * 60 * 1000);
+
+            await Usermodel.updateOne(
+                { _id: user._id },
+                { emailOTP, otpExpiresAt, attemptCount: 0 }
+            );
+
+            await sendemail({
+                to: email,
+                subject: "Confirm Email",
+                text: "رمز التحقق الخاص بك",
+                html,
+            });
+
+            console.log(`📩 OTP تم إرساله إلى البريد: ${email}`);
+        }
+
+    } catch (error) {
+        console.error("❌ فشل في إرسال OTP:", error.message);
+        return next(new Error("فشل في إرسال رمز التحقق", { cause: 500 }));
+    }
+
+    return successresponse(
+        res,
+        {
+            message: "User created successfully, OTP sent",
+            referralLink: referralLink
+        },
+        201
+    );
 });
+
+
+
+
+
+
+
+
+
+
+
+
 
 export const updateProfile = asyncHandelr(async (req, res, next) => {
     const { watchingplan, Downloadsplan, isPromoter } = req.body;
@@ -1407,71 +1535,84 @@ export const getUserRoleById = asyncHandelr(async (req, res, next) => {
 });
 
 
-export const confirmOTP = asyncHandelr(
-    async (req, res, next) => {
-        const { code, email } = req.body;
+export const confirmOTP = asyncHandelr(async (req, res, next) => {
+    const { code, email } = req.body;
 
-
-        const user = await dbservice.findOne({ model: Usermodel, filter: { email } })
-        if (!user) {
-            return next(new Error("Email does not exist tmm", { cause: 404 }));
-        }
-
-     
-        if (user.blockUntil && Date.now() < new Date(user.blockUntil).getTime()) {
-            const remainingTime = Math.ceil((new Date(user.blockUntil).getTime() - Date.now()) / 1000);
-            return next(new Error(`Too many attempts. Please try again after ${remainingTime} seconds.`, { cause: 429 }));
-        }
-
-    
-        if (user.isConfirmed) {
-            return next(new Error("Email is already confirmed", { cause: 400 }));
-        }
-
-    
-        if (Date.now() > new Date(user.otpExpiresAt).getTime()) {
-            return next(new Error("OTP has expired", { cause: 400 }));
-        }
-
- 
-        const isValidOTP = comparehash({ planText: `${code}`, valuehash: user.emailOTP });
-        if (!isValidOTP) {
-          
-            await dbservice.updateOne({ model: Usermodel, data: { $inc: { attemptCount: 1 } } })
-
-  
-            if (user.attemptCount + 1 >= 5) {
-                const blockUntil = new Date(Date.now() + 2 * 60 * 1000); 
-                await Usermodel.updateOne({ email }, { blockUntil, attemptCount: 0 });
-                return next(new Error("Too many attempts. You are temporarily blocked for 2 minutes.", { cause: 429 }));
-            }
-
-            return next(new Error("Invalid OTP. Please try again.", { cause: 400 }));
-        }
-
-     
-        await Usermodel.updateOne(
-            { email },
-            {
-
-                isConfirmed: true,
-                $unset: { emailOTP: 0, otpExpiresAt: 0, attemptCount: 0, blockUntil: 0 },
-            }
-        );
-        const access_Token = generatetoken({
-            payload: { id: user._id },
-            // signature: user.role === roletypes.Admin ? process.env.SYSTEM_ACCESS_TOKEN : process.env.USER_ACCESS_TOKEN,
-        });
-
-        const refreshToken = generatetoken({
-            payload: { id: user._id },
-            // signature: user.role === roletypes.Admin ? process.env.SYSTEM_REFRESH_TOKEN : process.env.USER_REFRESH_TOKEN,
-            expiresIn: "365d"
-        });
-
-        return successresponse(res, "Email confirmed successfully", 200, { access_Token, refreshToken });
+    if (!code || !email) {
+        return next(new Error("يرجى إدخال الكود والبريد الإلكتروني", { cause: 400 }));
     }
-);
+
+    // ✅ البحث عن المستخدم بالبريد الإلكتروني
+    const user = await dbservice.findOne({ model: Usermodel, filter: { email } });
+    if (!user) {
+        return next(new Error("البريد الإلكتروني غير مسجل", { cause: 404 }));
+    }
+
+    // ✅ لو الإيميل تم تأكيده مسبقًا
+    if (user.isConfirmed) {
+        return successresponse(res, "✅ البريد الإلكتروني تم تأكيده مسبقًا", 200, { user });
+    }
+
+    // ✅ التحقق من انتهاء صلاحية الكود
+    if (Date.now() > new Date(user.otpExpiresAt).getTime()) {
+        return next(new Error("انتهت صلاحية الكود", { cause: 400 }));
+    }
+
+    // ✅ التحقق من المحاولات السابقة والحظر المؤقت
+    if (user.blockUntil && Date.now() < new Date(user.blockUntil).getTime()) {
+        const remainingTime = Math.ceil((new Date(user.blockUntil).getTime() - Date.now()) / 1000);
+        return next(
+            new Error(`تم حظرك مؤقتًا. حاول مرة أخرى بعد ${remainingTime} ثانية.`, { cause: 429 })
+        );
+    }
+
+    // ✅ مقارنة كود OTP
+    const isValidOTP = comparehash({ planText: `${code}`, valuehash: user.emailOTP });
+    if (!isValidOTP) {
+        const attempts = (user.attemptCount || 0) + 1;
+        if (attempts >= 5) {
+            await Usermodel.updateOne(
+                { email },
+                {
+                    blockUntil: new Date(Date.now() + 2 * 60 * 1000),
+                    attemptCount: 0,
+                }
+            );
+            return next(
+                new Error("تم حظرك مؤقتًا بعد محاولات خاطئة كثيرة", { cause: 429 })
+            );
+        }
+
+        await Usermodel.updateOne({ email }, { attemptCount: attempts });
+        return next(new Error("كود التحقق غير صحيح", { cause: 400 }));
+    }
+
+    // ✅ لو الكود صحيح → تأكيد الإيميل
+    await Usermodel.updateOne(
+        { _id: user._id },
+        {
+            isConfirmed: true,
+            $unset: { emailOTP: 0, otpExpiresAt: 0, attemptCount: 0, blockUntil: 0 },
+        }
+    );
+
+    // ✅ توليد التوكنات
+    const access_Token = generatetoken({ payload: { id: user._id } });
+    const refreshToken = generatetoken({
+        payload: { id: user._id },
+        expiresIn: "365d",
+    });
+
+    return successresponse(res, "✅ تم تأكيد البريد الإلكتروني بنجاح", 200, {
+        access_Token,
+        refreshToken,
+        user,
+    });
+});
+
+
+
+
 
 
 export const resendOTP = asyncHandelr(async (req, res, next) => {
