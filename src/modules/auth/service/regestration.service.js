@@ -370,7 +370,83 @@ export const createFile = async (req, res) => {
 
 
 
-  
+export const createFilechannel = async (req, res) => {
+    try {
+        const userId = req.user._id;
+        const file = req.file;
+        const { shared = false, channelId } = req.body;
+
+        // التحقق من رفع ملف
+        if (!file) {
+            return res.status(400).json({ message: "❌ يرجى رفع ملف." });
+        }
+
+        // التحقق من إدخال channelId
+        if (!channelId) {
+            return res.status(400).json({ message: "❌ يرجى إرسال channelId." });
+        }
+
+        // التحقق من أن القناة موجودة
+        const channel = await ChannelModel.findById(channelId);
+        if (!channel) {
+            return res.status(404).json({ message: "❌ القناة غير موجودة." });
+        }
+
+        // تحديد نوع المورد المناسب
+        let resourceType = "raw";
+        if (file.mimetype.startsWith("image/")) resourceType = "image";
+        else if (file.mimetype.startsWith("video/")) resourceType = "video";
+
+        // رفع الملف إلى Cloudinary
+        const result = await cloud.uploader.upload(file.path, {
+            resource_type: resourceType,
+            folder: "cloudbox",
+            type: "upload",
+            use_filename: true,
+            unique_filename: false,
+        });
+
+        const fileSizeMB = Math.ceil(file.size / (1024 * 1024));
+
+        // إنشاء رابط مشاركة إذا الملف مشترك
+        let sharedUrl = null;
+        if (shared === true || shared === "true") {
+            const uniqueId = nanoid(10);
+            sharedUrl = `https://yourapp.com/shared/${uniqueId}`;
+        }
+
+        // حفظ في قاعدة البيانات
+        const savedFile = await File.create({
+            userId,
+            fileName: file.originalname,
+            fileType: file.mimetype,
+            fileSize: fileSizeMB,
+            url: result.secure_url,
+            shared,
+            sharedUrl,
+            channelId,    // 🔥🔥 إضافة channelId هنا
+        });
+
+        // حذف الملف من النظام
+        fs.unlinkSync(file.path);
+
+        res.status(201).json({
+            message: "✅ تم رفع الملف بنجاح",
+            file: savedFile,
+            ...(sharedUrl && { sharedUrl }),
+        });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({
+            message: "❌ حدث خطأ أثناء رفع الملف",
+            error: err.message,
+        });
+    }
+};
+
+
+
+
 
 export const createCopyrightReport = async (req, res, next) => {
     try {
@@ -624,6 +700,48 @@ export const getUserFiles = async (req, res) => {
         res.status(500).json({ message: '❌ خطأ في جلب الملفات', error: err.message });
     }
 };
+
+
+
+export const getUserFileschannel = async (req, res) => {
+    try {
+        const { channelId, type } = req.query;
+
+        if (!channelId) {
+            return res.status(400).json({ message: "❌ channelId مطلوب" });
+        }
+
+        const typeMap = {
+            image: ['image/jpg', 'image/jpeg', 'image/png', 'image/gif'],
+            video: ['video/mp4', 'video/mpeg', 'video/x-msvideo'],
+            document: ['application/pdf', 'application/json'],
+            zip: ['application/zip', 'application/x-zip-compressed'],
+        };
+
+        const mimeTypes = type ? typeMap[type.toLowerCase()] : null;
+
+        let filter = { channelId };
+
+        if (mimeTypes) {
+            filter.fileType = { $in: mimeTypes };
+        }
+
+        const files = await File.find(filter);
+
+        return res.status(200).json({
+            success: true,
+            files,
+        });
+
+    } catch (err) {
+        res.status(500).json({
+            message: "❌ خطأ في جلب ملفات القناة",
+            error: err.message
+        });
+    }
+};
+
+
 
 
 export const saveFile = async (req, res) => {
