@@ -2,7 +2,7 @@
 
 import mongoose, { Schema, Types, model } from "mongoose";
 export const gendertypes = { male: "Male", female: "Female" }
-export const roletypes = { User: "User", Admin: "Admin" }
+export const roletypes = { User: "User", Admin: "Admin", Owner:"Owner"}
 export const providerTypes = { system: "system", google: "google" }
 
 const userSchema = new mongoose.Schema(
@@ -55,6 +55,12 @@ const userSchema = new mongoose.Schema(
             ref: "Class"
         },
 
+        channelsSubscribed: [
+            {
+                type: mongoose.Schema.Types.ObjectId,
+                ref: "Channel"
+            }
+        ],
 
      
         profilePic: {

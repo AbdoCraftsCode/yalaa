@@ -33,6 +33,7 @@ import withdrawalRequestSchemaModel from "../../../DB/models/withdrawalRequestSc
 import { SavedFile } from "../../../DB/models/savedFileSchema.model.js";
 import { sendemail } from "../../../utlis/email/sendemail.js";
 import { vervicaionemailtemplet } from "../../../utlis/temblete/vervication.email.js";
+import { ChannelModel } from "../../../DB/models/ChannelModel.js";
 
 // export const signup = asyncHandelr(async (req, res, next) => {
     
@@ -367,6 +368,9 @@ export const createFile = async (req, res) => {
     }
   };
 
+
+
+  
 
 export const createCopyrightReport = async (req, res, next) => {
     try {
@@ -2322,3 +2326,85 @@ export const getAllWithdrawals = async (req, res) => {
 // utils/countryPricing.js
 
   
+
+
+
+export const createChannel = asyncHandelr(async (req, res, next) => {
+    const userId = req.user.id;
+    const { name, description } = req.body;
+
+    if (!name) return next(new Error("❌ اسم القناة مطلوب", { cause: 400 }));
+
+    // رفع صورة القناة
+    if (!req.file) {
+        return next(new Error("❌ صورة القناة مطلوبة", { cause: 400 }));
+    }
+
+    const uploaded = await cloud.uploader.upload(req.file.path, {
+        folder: "channels"
+    });
+
+    const uploadedImage = {
+        secure_url: uploaded.secure_url,
+        public_id: uploaded.public_id
+    };
+
+    // إنشاء القناة
+    const newChannel = await ChannelModel.create({
+        name,
+        description,
+        image: uploadedImage,
+        createdBy: userId
+    });
+
+    res.status(201).json({
+        success: true,
+        message: "✅ تم إنشاء القناة بنجاح",
+        data: newChannel
+    });
+});
+
+export const subscribeToChannel = asyncHandelr(async (req, res, next) => {
+    const userId = req.user.id;
+    const { channelId } = req.body;
+
+    const channel = await ChannelModel.findById(channelId);
+    if (!channel) return next(new Error("❌ القناة غير موجودة", { cause: 404 }));
+
+    const user = await Usermodel.findById(userId);
+
+    if (user.channelsSubscribed.includes(channelId)) {
+        return next(new Error("⚠️ أنت بالفعل مشترك في القناة", { cause: 400 }));
+    }
+
+    user.channelsSubscribed.push(channelId);
+    await user.save();
+
+    res.json({
+        success: true,
+        message: "✅ تم الاشتراك في القناة",
+    });
+});
+
+
+export const getMySubscribedChannels = asyncHandelr(async (req, res, next) => {
+    const userId = req.user.id;
+
+    // 🟦 جلب بيانات المستخدم + القنوات المشترك فيها
+    const user = await Usermodel.findById(userId)
+        .populate("channelsSubscribed");
+
+    // 🟨 جلب القنوات اللي هو عاملها
+    const myCreatedChannels = await ChannelModel.find({ createdBy: userId });
+
+    res.json({
+        success: true,
+        message: "تم جلب القنوات",
+        data: {
+            subscribedChannels: user.channelsSubscribed,  // القنوات المشترك فيها
+            myChannels: myCreatedChannels                 // قنواته هو
+        }
+    });
+});
+
+

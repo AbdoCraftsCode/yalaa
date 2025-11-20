@@ -37,6 +37,13 @@ const fileSchema = new mongoose.Schema({
         type: Date,
         default: Date.now,
     },
+
+    channelId: {   // 🔥🔥 الإضافة المهمة
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Channel",
+        required: false
+    },
+
     sharedBy: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'User'
