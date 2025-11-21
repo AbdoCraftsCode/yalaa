@@ -1098,6 +1098,12 @@ export const getSharedFile = async (req, res) => {
 
 
 
+
+
+
+
+
+
 export const withdrawEarnings = async (req, res) => {
     try {
         const userId = req.user._id;

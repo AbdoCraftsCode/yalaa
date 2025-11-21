@@ -6,6 +6,7 @@ import { deleteUserById, forgetpassword,   login, loginwithGmail, refreshToken, 
 import { authentication } from "../../middlewere/authontcation.middlewere.js";
 import { fileValidationTypes, uploadCloudFile } from "../../utlis/multer/cloud.multer.js";
 import { findGroupChat } from "../chat/chat/chat.service.js";
+import { getSharedItems } from "../user/service/profile.service.js";
 
 const routr = Router()
 
@@ -119,6 +120,8 @@ routr.post("/requestWithdrawal", authentication(), requestWithdrawal)
 
 routr.get("/getMyRank", authentication(), getMyRank)
 routr.get("/getUserFiles", authentication(), getUserFiles)
+
+routr.get("/getSharedItems",  getSharedItems)
 
 routr.get("/getUserFileschannel",  getUserFileschannel)
 

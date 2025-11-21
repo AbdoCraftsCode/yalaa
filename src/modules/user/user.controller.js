@@ -2,7 +2,7 @@ import { Router } from "express";
 import * as validators from "../user/user.validation.js"
 import { validation } from "../../middlewere/validation.middlewere.js";
 import { authentication, authorization } from "../../middlewere/authontcation.middlewere.js";
-import { coverimages, Getloginuseraccount, updateimage, updatepassword, Updateuseraccount, Getprofiledata, deleteProfileImage, deleteCoverImage, updateUsername, subscribeToPremium, createFolder, getUserFolders, createFile, getFolderFiles, deleteFolder, savetoken, getAllUsers, sendnotification, notifyall, deleteFcmToken, getUserNotifications, markAllAsRead, generateFolderShareLink, getSharedFolderContent, getSharedFoldersWithFiles, disableFileShare } from "./service/profile.service.js";
+import { coverimages, Getloginuseraccount, updateimage, updatepassword, Updateuseraccount, Getprofiledata, deleteProfileImage, deleteCoverImage, updateUsername, subscribeToPremium, createFolder, getUserFolders, createFile, getFolderFiles, deleteFolder, savetoken, getAllUsers, sendnotification, notifyall, deleteFcmToken, getUserNotifications, markAllAsRead, generateFolderShareLink, getSharedFolderContent, getSharedFoldersWithFiles, disableFileShare, updateFolderName, generateMultiShareLink } from "./service/profile.service.js";
 import { fileValidationTypes, uploadCloudFile } from "../../utlis/multer/cloud.multer.js";
 
 const router = Router()
@@ -45,6 +45,13 @@ router.get("/getAllUsers", getAllUsers)
 router.patch("/disableFileShare/:fileId", disableFileShare)
 
 router.delete("/deleteFolder/:folderId", authentication(), deleteFolder)
+
+router.post("/generateMultiShareLink", authentication(), generateMultiShareLink)
+
+
+router.patch("/updateFolderName/:folderId", authentication(), updateFolderName)
+
+
 
 router.patch("/profile/coverimage", authentication(),
   

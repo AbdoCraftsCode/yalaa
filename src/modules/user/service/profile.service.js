@@ -17,7 +17,7 @@ export const Updateuseraccount = asyncHandelr(async (req, res, next) => {
     const {
         lastName, mobileNumber, DOB, gender,
         firstName } = req.body
-    
+
 
     const user = await dbservice.findOne({
 
@@ -34,10 +34,10 @@ export const Updateuseraccount = asyncHandelr(async (req, res, next) => {
 
 
     const encryptedPhone = encryptData(mobileNumber, process.env.CRYPTO_SECRET_KEY);
-    
+
 
     await dbservice.findOneAndUpdate({
-    
+
         model: Usermodel,
         filter: { _id: req.user._id },
         data: {
@@ -50,36 +50,36 @@ export const Updateuseraccount = asyncHandelr(async (req, res, next) => {
 
         },
         options: {
-            new:true
+            new: true
         }
-          
-          
-       
 
-})
 
-    
 
-    
+
+    })
+
+
+
+
     return successresponse(res, {
 
         username: req.user.username,
         gender: req.user.gender,
         mobileNumber: req.user.mobileNumber,
-        DOB:req.user.DOB
-     
-        
-     })
+        DOB: req.user.DOB
+
+
+    })
 })
 
 export const updatepassword = asyncHandelr(async (req, res, next) => {
     const { oldpassword, password, confirmationpassword } = req.body
     if (!comparehash({ planText: oldpassword, valuehash: req.user.password })) {
-        
+
         return next(new Error("password not correct", { cause: 404 }))
     }
-  
-    
+
+
     const user = await dbservice.findOneAndUpdate({
 
         model: Usermodel,
@@ -88,18 +88,18 @@ export const updatepassword = asyncHandelr(async (req, res, next) => {
             _id: req.user._id
         },
         data: {
-            password: generatehash({ planText: password }) 
+            password: generatehash({ planText: password })
             , changecredintialTime: Date.now()
         }
     })
 
 
 
- 
 
 
-    return successresponse(res,"done success", 201, {
-     username:user.username
+
+    return successresponse(res, "done success", 201, {
+        username: user.username
     })
 })
 
@@ -153,7 +153,7 @@ export const Getprofiledata = asyncHandelr(async (req, res, next) => {
         username: user.username,
         coverPic: user.coverPic,
         profilePic: user.profilePic,
-    
+
         mobileNumber: decryptphone,
     })
 })
@@ -204,7 +204,7 @@ export const subscribeToPremium = asyncHandelr(async (req, res, next) => {
         isBrimume: user.isBrimume,
     });
 });
-  
+
 
 
 
@@ -319,17 +319,17 @@ export const deleteProfileImage = asyncHandelr(async (req, res, next) => {
 
 
 export const deleteCoverImage = asyncHandelr(async (req, res, next) => {
-    const { public_id } = req.body; 
-    const userId = req.user._id; 
+    const { public_id } = req.body;
+    const userId = req.user._id;
 
 
     await cloud.uploader.destroy(public_id);
 
-   
+
     const updatedUser = await dbservice.findOneAndUpdate({
         model: Usermodel,
         filter: { _id: userId },
-        data: { $pull: { coverPic: { public_id } } }, 
+        data: { $pull: { coverPic: { public_id } } },
         options: { new: true }
     });
 
@@ -341,35 +341,97 @@ export const deleteCoverImage = asyncHandelr(async (req, res, next) => {
 
 
 
+// export const createFolder = asyncHandelr(async (req, res, next) => {
+//     const { name } = req.body;
+//     const userId = req.user._id;
+
+//     if (!name) {
+//         return res.status(400).json({ message: "❌ اسم المجلد مطلوب" });
+//     }
+
+//     const folder = await Folder.create({ name, userId });
+
+//     return res.status(201).json({
+//         message: "✅ تم إنشاء المجلد",
+
+//     });
+// });
+
+
 export const createFolder = asyncHandelr(async (req, res, next) => {
-    const { name } = req.body;
+    const { name, parentFolder } = req.body;
     const userId = req.user._id;
 
     if (!name) {
         return res.status(400).json({ message: "❌ اسم المجلد مطلوب" });
     }
 
-    const folder = await Folder.create({ name, userId });
+    const folder = await Folder.create({
+        name,
+        userId,
+        parentFolder: parentFolder || null
+    });
 
     return res.status(201).json({
         message: "✅ تم إنشاء المجلد",
-   
+        folder
     });
 });
-  
 
+
+
+// function buildTree(folders, parent = null) {
+//     return folders
+//         .filter(f => String(f.parentFolder) === String(parent))
+//         .map(f => ({
+//             _id: f._id,
+//             name: f.name,
+//             createdAt: f.createdAt,
+//             shared: f.shared,
+//             sharedUrl: f.sharedUrl,
+//             children: buildTree(folders, f._id)  // ⭐ هنا السحر
+//         }));
+// }
+
+
+
+// export const getUserFolders = asyncHandelr(async (req, res) => {
+//     const userId = req.user._id;
+
+//     const folders = await Folder.find({ userId });
+
+//     res.status(200).json({
+//         message: "✅ تم جلب المجلدات الخاصة بك",
+//         folders,
+//     });
+// });
 
 export const getUserFolders = asyncHandelr(async (req, res) => {
     const userId = req.user._id;
 
     const folders = await Folder.find({ userId });
 
+    const tree = buildTree(folders);
+
     res.status(200).json({
         message: "✅ تم جلب المجلدات الخاصة بك",
-        folders,
+        folders: tree
     });
 });
-  
+
+function buildTree(folders, parent = null) {
+    return folders
+        .filter(f => String(f.parentFolder) === String(parent))
+        .map(f => ({
+            ...f._doc,          // ← يرجّع كل بيانات الفولدر كاملة
+            children: buildTree(folders, f._id)  // ← يرجّع الأبناء
+        }));
+}
+
+
+
+
+
 export const createFile = async (req, res) => {
     try {
         const userId = req.user._id;
@@ -425,7 +487,7 @@ export const createFile = async (req, res) => {
         });
     }
 };
-  
+
 export const getFolderFiles = asyncHandelr(async (req, res) => {
     const userId = req.user._id;
     const { folderId } = req.params;
@@ -445,6 +507,7 @@ export const getFolderFiles = asyncHandelr(async (req, res) => {
         if (mimeTypes) {
             filter.fileType = { $in: mimeTypes };
         }
+
     }
 
     const files = await File.find(filter);
@@ -454,7 +517,7 @@ export const getFolderFiles = asyncHandelr(async (req, res) => {
         files,
     });
 });
-  
+
 
 export const generateFolderShareLink = async (req, res) => {
     try {
@@ -513,6 +576,182 @@ export const generateFolderShareLink = async (req, res) => {
         });
     }
 };
+
+
+
+
+export const generateMultiShareLink = async (req, res) => {
+    try {
+        const userId = req.user._id;
+        const { folderIds = [], fileIds = [] } = req.body;
+
+        // تحويل لو واحد فقط
+        const finalFolderIds = Array.isArray(folderIds) ? folderIds : [folderIds];
+        const finalFileIds = Array.isArray(fileIds) ? fileIds : [fileIds];
+
+        if (finalFolderIds.length === 0 && finalFileIds.length === 0) {
+            return res.status(400).json({ message: "❌ يجب إرسال فولدرات أو ملفات للمشاركة" });
+        }
+
+        // جلب كل الفولدرات
+        const folders = await Folder.find({
+            _id: { $in: finalFolderIds },
+            userId
+        });
+
+        // جلب كل الملفات
+        const files = await File.find({
+            _id: { $in: finalFileIds },
+            userId
+        });
+
+        if (folders.length === 0 && files.length === 0) {
+            return res.status(404).json({ message: "❌ لا يوجد عناصر تخصك للمشاركة" });
+        }
+
+        // بناء نص الوصف
+        const folderNames = folders.map(f => f.name).join(", ");
+        const fileNames = files.map(f => f.fileName).join(", ");
+
+        const descriptionText =
+            `📂 تمت مشاركة عناصر معك\n` +
+            (folderNames ? `📁 المجلدات: ${folderNames}\n` : "") +
+            (fileNames ? `📄 الملفات: ${fileNames}` : "");
+
+        // إنشاء رابط Branch واحد
+        const branchRes = await axios.post(
+            "https://api2.branch.io/v1/url",
+            {
+                branch_key: process.env.BRANCH_KEY,
+                campaign: "multi_share",
+                feature: "sharing",
+                channel: "in_app",
+                data: {
+                    "$deeplink_path": `shared-items`,
+                    "folder_ids": finalFolderIds,
+                    "file_ids": finalFileIds,
+                    "shared_by": userId,
+                    "$android_url": `https://mega-box.vercel.app/shared-items`,
+                    "$fallback_url": `https://mega-box.vercel.app/shared-items`,
+                    "$desktop_url": `https://mega-box.vercel.app/shared-items`,
+                    "$og_title": "📦 مشاركة عناصر",
+                    "$og_description": descriptionText,
+                    "$og_image_url": "https://mega-box.vercel.app/share/78///folder-share-image.png"
+                }
+            }
+        );
+
+        const shareUrl = branchRes.data?.url;
+
+        if (!shareUrl) {
+            return res.status(500).json({ message: "❌ لم يتم استلام رابط المشاركة من Branch." });
+        }
+
+        // تحديث كل فولدر
+        for (const folder of folders) {
+            folder.shared = true;
+            folder.sharedUrl = shareUrl;
+            folder.sharedBy = userId;
+            await folder.save();
+        }
+
+        // تحديث كل ملف
+        for (const file of files) {
+            file.shared = true;
+            file.sharedUrl = shareUrl;
+            file.sharedBy = userId;
+            await file.save();
+        }
+
+        return res.status(200).json({
+            message: "✅ تم إنشاء رابط مشاركة موحد بنجاح",
+            shareUrl,
+            folders: folders.length,
+            files: files.length
+        });
+
+    } catch (err) {
+        console.error("Error generating multi share link:", err);
+        return res.status(500).json({
+            message: "❌ حدث خطأ أثناء إنشاء رابط المشاركة",
+            error: err?.response?.data || err.message
+        });
+    }
+};
+
+
+
+export const getSharedItems = asyncHandelr(async (req, res) => {
+    try {
+        let { folder_ids = [], file_ids = [], shared_by } = req.body;
+
+        // تحويلهم Array لو جايين String
+        folder_ids = Array.isArray(folder_ids) ? folder_ids : [folder_ids];
+        file_ids = Array.isArray(file_ids) ? file_ids : [file_ids];
+
+        if (!shared_by) {
+            return res.status(400).json({ message: "❌ shared_by غير موجود." });
+        }
+
+        // جلب بيانات صاحب المشاركة
+        const sharedUser = await Usermodel.findById(shared_by).select("username email");
+        if (!sharedUser) {
+            return res.status(404).json({ message: "❌ المستخدم غير موجود." });
+        }
+
+        // جلب الفولدرات
+        const folders = await Folder.find({ _id: { $in: folder_ids } });
+
+        // جلب الملفات داخل كل فولدر
+        const foldersWithFiles = [];
+        for (const folder of folders) {
+            const filesInside = await File.find({ folderId: folder._id });
+            foldersWithFiles.push({
+                id: folder._id,
+                name: folder.name,
+                createdAt: folder.createdAt,
+                files: filesInside.map(f => ({
+                    id: f._id,
+                    name: f.fileName,
+                    type: f.fileType,
+                    size: f.fileSize,
+                    url: f.url
+                }))
+            });
+        }
+
+        // جلب الملفات المستقلة (اللي مش جوه فولدر)
+        const files = await File.find({
+            _id: { $in: file_ids }
+        });
+
+        const mappedFiles = files.map(file => ({
+            id: file._id,
+            name: file.fileName,
+            type: file.fileType,
+            size: file.fileSize,
+            url: file.url,
+            createdAt: file.createdAt
+        }));
+
+        return res.status(200).json({
+            message: "✅ تم جلب العناصر المشتركة بنجاح",
+            sharedBy: sharedUser,
+            folders: foldersWithFiles,
+            files: mappedFiles
+        });
+
+    } catch (err) {
+        console.error("Error in getSharedItems:", err);
+        return res.status(500).json({
+            message: "❌ حدث خطأ أثناء جلب العناصر",
+            error: err.message
+        });
+    }
+});
+
+
+
 export const getSharedFoldersWithFiles = async (req, res) => {
     try {
         const userId = req.user._id;
@@ -589,7 +828,7 @@ export const disableFileShare = async (req, res) => {
         return res.status(500).json({ message: "❌ حدث خطأ أثناء تعطيل المشاركة", error: err.message });
     }
 };
-  
+
 
 export const getSharedFolderContent = async (req, res) => {
     try {
@@ -681,6 +920,32 @@ export const deleteFolder = asyncHandelr(async (req, res) => {
     });
 });
 
+export const updateFolderName = asyncHandelr(async (req, res) => {
+    const userId = req.user._id;
+    const { folderId } = req.params;
+    const { name } = req.body;
+
+    if (!name || !name.toString().trim()) {
+        return res.status(400).json({ message: "❌ اسم المجلد الجديد مطلوب" });
+    }
+
+    // التأكد أن المجلد موجود ويخص المستخدم
+    const folder = await Folder.findOne({ _id: folderId, userId });
+    if (!folder) {
+        return res.status(404).json({ message: "❌ المجلد غير موجود أو لا يخصك" });
+    }
+
+    // تعديل الاسم
+    folder.name = name.toString().trim();
+    await folder.save();
+
+    return res.status(200).json({
+        message: "✅ تم تعديل اسم المجلد بنجاح",
+        folder
+    });
+});
+
+
 
 
 
@@ -768,7 +1033,7 @@ export const getAllUsers = asyncHandelr(async (req, res, next) => {
         email: user.email,
         id: user._id,
         isBrimume: user.isBrimume,
-      
+
     }));
 
     return successresponse(res, {
