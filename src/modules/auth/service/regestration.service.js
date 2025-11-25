@@ -990,7 +990,7 @@ export const getSharedFile = async (req, res) => {
         const { fileId } = req.params;
 
         if (!fileId) {
-            return res.status(400).json({ message: "❌ يجب إرسال معرف الملف." });
+            return res.status(400).json({ message: "❌ يجب إرسال معرف الملف الاصلي." });
         }
 
         const file = await File.findById(fileId).populate("userId", "username email");
