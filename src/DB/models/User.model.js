@@ -46,6 +46,7 @@ const userSchema = new mongoose.Schema(
         isclosed: { type: Boolean, default: false },
         isSearching: { type: Boolean, default: false },
         fcmToken: { type: String, default: null },
+        brimumeExpiresAt: { type: Date, default: null },
         image: {
             type: mongoose.Schema.Types.ObjectId,
             ref: "Image"

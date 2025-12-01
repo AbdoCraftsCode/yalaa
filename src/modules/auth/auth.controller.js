@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { validation } from "../../middlewere/validation.middlewere.js";
 import  * as validators from "../auth/auth.validate.js"
-import { addQuestion, adduser, confirmOTP, createClass, generateShareLink, createFile, createImages, createSupject, getAllClasses, getAllImages, getAllRanks, GetFriendsList, getMyRank, Getprofiledata, getQuestionsByClassAndSubject, getSharedFile, getSubjectsByClass, getUserFiles, getUserRoleById, getUserStorageUsage, resendOTP, shareFile, signup, signupwithGmail, submitAnswer, incrementFileView, getShareLinkAnalytics, getUserAnalytics, updateProfile, getUserEarnings, deleteFile, updateFileName, withdrawEarnings, getWithdrawalHistory, getAllPromoters, getUserAnalyticsadmin, getUserEarningsadmin, getShareLinkAnalyticsadmin, getSharedFilesByUser, createCopyrightReport, getAllCopyrightReports, requestWithdrawal, getAllWithdrawals, saveFile, createChannel, subscribeToChannel, getMySubscribedChannels, createFilechannel, getUserFileschannel } from "./service/regestration.service.js";
+import { addQuestion, adduser, confirmOTP, createClass, generateShareLink, createFile, createImages, createSupject, getAllClasses, getAllImages, getAllRanks, GetFriendsList, getMyRank, Getprofiledata, getQuestionsByClassAndSubject, getSharedFile, getSubjectsByClass, getUserFiles, getUserRoleById, getUserStorageUsage, resendOTP, shareFile, signup, signupwithGmail, submitAnswer, incrementFileView, getShareLinkAnalytics, getUserAnalytics, updateProfile, getUserEarnings, deleteFile, updateFileName, withdrawEarnings, getWithdrawalHistory, getAllPromoters, getUserAnalyticsadmin, getUserEarningsadmin, getShareLinkAnalyticsadmin, getSharedFilesByUser, createCopyrightReport, getAllCopyrightReports, requestWithdrawal, getAllWithdrawals, saveFile, createChannel, subscribeToChannel, getMySubscribedChannels, createFilechannel, getUserFileschannel, updateUserEarningsByOwner, toggleBrimumeByOwner, createSubscription, getAllSubscriptions, createPlan, getPlans, deletePlan, updatePlan } from "./service/regestration.service.js";
 import { deleteUserById, forgetpassword,   login, loginwithGmail, refreshToken, resetpassword, toggleUserBanByOwner } from "./service/authontecation.service.js";
 import { authentication } from "../../middlewere/authontcation.middlewere.js";
 import { fileValidationTypes, uploadCloudFile } from "../../utlis/multer/cloud.multer.js";
@@ -31,6 +31,14 @@ routr.post(
         // تم دمج zip ضمن document فلا داعي لها هنا
     ]).single('file'),
     createFile
+);
+
+
+routr.post(
+    "/createSubscription",
+    authentication(),
+    uploadCloudFile(fileValidationTypes.image).single("invoice"), // اسم الحقل invoice
+    createSubscription
 );
 
 
@@ -93,6 +101,18 @@ routr.get(
 
 routr.post("/resendOTP", resendOTP)
 
+routr.post("/createPlan", authentication(), createPlan)
+
+routr.get("/getPlans", getPlans)
+
+routr.delete("/deletePlan/:id", deletePlan)
+
+routr.patch("/updatePlan/:id", updatePlan)
+
+
+
+routr.get("/getAllSubscriptions", getAllSubscriptions)
+
 routr.patch("/updateProfile", authentication(), updateProfile)
 routr.delete("/deleteFile/:fileId", authentication(), deleteFile)
 routr.patch("/updateFileName/:fileId", authentication(), updateFileName)
@@ -116,7 +136,15 @@ routr.get("/getAllWithdrawals", getAllWithdrawals)
 routr.post("/addQuestion", addQuestion)
 routr.post("/submitAnswer", authentication(), submitAnswer)
 routr.post("/saveFile", authentication(), saveFile)
+
+
 routr.post("/requestWithdrawal", authentication(), requestWithdrawal)
+
+routr.patch("/updateUserEarningsByOwner/:userId", authentication(), updateUserEarningsByOwner)
+
+routr.patch("/toggleBrimumeByOwner/:userId", authentication(), toggleBrimumeByOwner)
+
+
 
 routr.get("/getMyRank", authentication(), getMyRank)
 routr.get("/getUserFiles", authentication(), getUserFiles)

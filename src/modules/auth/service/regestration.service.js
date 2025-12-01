@@ -19,6 +19,10 @@ import { nanoid, customAlphabet } from "nanoid";
 import bcrypt from "bcrypt"
 import File from "../../../DB/models/files.conrroller.js";
 // import admin from 'firebase-admin';
+
+
+
+
 import fs from 'fs';
 import axios from 'axios';
 import { FileShareAnalytics } from "../../../DB/models/analises.model.js";
@@ -34,6 +38,8 @@ import { SavedFile } from "../../../DB/models/savedFileSchema.model.js";
 import { sendemail } from "../../../utlis/email/sendemail.js";
 import { vervicaionemailtemplet } from "../../../utlis/temblete/vervication.email.js";
 import { ChannelModel } from "../../../DB/models/ChannelModel.js";
+import SubscriptionModell from "../../../DB/models/subscriptionSchemausers.js";
+import { PlanModel } from "../../../DB/models/PlanSchema.js";
 
 // export const signup = asyncHandelr(async (req, res, next) => {
     
@@ -306,6 +312,160 @@ export const getUserEarnings = async (req, res) => {
         return res.status(500).json({ message: "❌ حدث خطأ", error: err.message });
     }
 };
+
+
+
+export const updateUserEarningsByOwner = async (req, res) => {
+    try {
+        // فقط Owner
+        if (req.user.role !== "Owner") {
+            return res.status(403).json({ message: "❌ غير مسموح" });
+        }
+
+        const targetUserId = req.params.userId;
+
+        const {
+            pendingRewards,       // Array [{ _id, amount }]
+            confirmedRewards,     // Number
+            totalEarnings         // Number
+        } = req.body;
+
+        // 1️⃣ هات كل الملفات الخاصة بالمستخدم
+        const userFiles = await File.find({ userId: targetUserId }).select("_id");
+
+        if (!userFiles.length) {
+            return res.status(404).json({ message: "❌ المستخدم ليس لديه ملفات" });
+        }
+
+        const fileIds = userFiles.map(f => f._id);
+
+        // 2️⃣ هات سجلات التحليلات
+        const analyticsRecords = await FileShareAnalytics.find({
+            fileId: { $in: fileIds }
+        });
+
+        if (!analyticsRecords.length) {
+            return res.status(404).json({ message: "❌ لا توجد بيانات أرباح للمستخدم" });
+        }
+
+        for (const record of analyticsRecords) {
+
+            // ---- تعديل pendingRewards بدون تغيير IDs ----
+            if (Array.isArray(pendingRewards)) {
+
+                // نخلي الـ pendingRewards القديمة في شكل Map علشان نبحث بسهولة
+                const existingMap = new Map(
+                    record.pendingRewards.map(pr => [pr._id.toString(), pr])
+                );
+
+                const newPending = [];
+
+                for (const item of pendingRewards) {
+
+                    // لو العنصر موجود → نعدّل amount فقط ونحتفظ createdAt
+                    if (item._id && existingMap.has(item._id)) {
+                        const old = existingMap.get(item._id);
+                        old.amount = item.amount ?? old.amount;
+                        newPending.push(old);
+                    }
+                    // لو عنصر جديد من غير _id → نضيفه بإصدار _id جديد من mongoose
+                    else if (!item._id) {
+                        newPending.push({
+                            amount: item.amount,
+                            createdAt: new Date()
+                        });
+                    }
+                }
+
+                record.pendingRewards = newPending;
+            }
+
+            // ---- تعديل confirmedRewards ----
+            if (typeof confirmedRewards === "number") {
+                record.confirmedRewards = confirmedRewards;
+            }
+
+            // ---- تعديل totalEarnings ----
+            if (typeof totalEarnings === "number") {
+                record.totalEarnings = totalEarnings;
+            }
+
+            await record.save();
+        }
+
+        return res.status(200).json({
+            message: "✅ تم تحديث أرباح المستخدم بنجاح",
+            updatedFilesCount: analyticsRecords.length
+        });
+
+    } catch (err) {
+        console.error("Error:", err);
+        return res.status(500).json({
+            message: "❌ حدث خطأ أثناء التعديل",
+            error: err.message
+        });
+    }
+};
+
+setInterval(async () => {
+    try {
+        const now = new Date();
+        await Usermodel.updateMany(
+            { isBrimume: true, brimumeExpiresAt: { $lte: now } },
+            { isBrimume: false, brimumeExpiresAt: null }
+        );
+    } catch (err) {
+        console.error("Cron error:", err);
+    }
+}, 60 * 1000); // كل
+
+
+
+export const toggleBrimumeByOwner = async (req, res) => {
+    try {
+        // صلاحية Owner فقط
+        if (req.user.role !== "Owner") {
+            return res.status(403).json({ message: "❌ غير مسموح" });
+        }
+
+        const userId = req.params.userId;
+        const { activate, durationDays } = req.body; // ✅ المدة بالأيام
+
+        const user = await Usermodel.findById(userId);
+        if (!user) {
+            return res.status(404).json({ message: "❌ المستخدم غير موجود" });
+        }
+
+        if (activate) {
+            user.isBrimume = true;
+
+            if (durationDays && typeof durationDays === "number") {
+                user.brimumeExpiresAt = new Date(Date.now() + durationDays * 24 * 60 * 60 * 1000);
+            } else {
+                user.brimumeExpiresAt = null; // بدون مدة محددة
+            }
+        } else {
+            user.isBrimume = false;
+            user.brimumeExpiresAt = null;
+        }
+
+        await user.save();
+
+        res.status(200).json({
+            success: true,
+            message: `✅ تم تحديث isBrimume للمستخدم ${activate ? "تفعيل" : "تعطيل"}`,
+            isBrimume: user.isBrimume,
+            brimumeExpiresAt: user.brimumeExpiresAt
+        });
+
+    } catch (err) {
+        console.error("Error:", err);
+        res.status(500).json({ message: "❌ حدث خطأ", error: err.message });
+    }
+};
+
+
+
 
 export const createFile = async (req, res) => {
     try {
@@ -1486,6 +1646,7 @@ export const getUserStorageUsage = async (req, res) => {
 
 
 
+
 export const signup = asyncHandelr(async (req, res, next) => {
     const { username, email, classId, password, confirmationpassword, image, gender, ref, phone } = req.body;
     console.log(username, email, password);
@@ -2532,3 +2693,179 @@ export const getMySubscribedChannels = asyncHandelr(async (req, res, next) => {
 });
 
 
+
+
+
+export const createSubscription = async (req, res) => {
+    try {
+        const ownerId = req.user._id; // الي أنشأ الاشتراك (Owner أو Admin)
+        const file = req.file;
+
+        const { planName, durationDays, subscriberName, phone } = req.body;
+
+        // تحقق من البيانات
+        if (!planName || !durationDays || !subscriberName || !phone) {
+            return res.status(400).json({ message: "❌ كل البيانات مطلوبة." });
+        }
+
+        if (!file) {
+            return res.status(400).json({ message: "❌ يرجى رفع صورة الفاتورة." });
+        }
+
+        // نوع الملف (الصورة فقط)
+        let resourceType = "image";
+
+        // رفع الصورة إلى Cloudinary
+        const result = await cloud.uploader.upload(file.path, {
+            resource_type: resourceType,
+            folder: "subscriptions/invoices",
+            use_filename: true,
+            unique_filename: false,
+        });
+
+        // حذف الملف المؤقت
+        fs.unlinkSync(file.path);
+
+        // إنشاء الاشتراك في الداتا بيز
+        const subscription = await SubscriptionModell.create({
+            planName,
+            durationDays,
+            subscriberName,
+            phone,
+            createdBy: ownerId,
+            invoicePic: {
+                secure_url: result.secure_url,
+                public_id: result.public_id,
+            }
+        });
+
+        res.status(201).json({
+            message: "✅ تم إنشاء الاشتراك بنجاح",
+            subscription
+        });
+
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({
+            message: "❌ خطأ أثناء إنشاء الاشتراك",
+            error: err.message
+        });
+    }
+};
+
+
+
+
+export const getAllSubscriptions = async (req, res) => {
+    try {
+        const subscriptions = await SubscriptionModell.find()
+            .populate({
+                path: "createdBy",
+                select: "username email phone"  // عرض اسم + ايميل + موبايل الشخص اللي أنشأ الاشتراك
+            })
+            .sort({ createdAt: -1 }); // الأحدث أولاً
+
+        // تنسيق جميل للـ response
+        const formatted = subscriptions.map(sub => ({
+            id: sub._id,
+            planName: sub.planName,
+            durationDays: sub.durationDays,
+            subscriberName: sub.subscriberName,
+            phone: sub.phone,
+            invoicePic: sub.invoicePic.secure_url,
+            startDate: sub.startDate.toLocaleDateString(),
+            endDate: sub.endDate.toLocaleDateString(),
+            createdAt: sub.createdAt.toLocaleDateString(),
+            createdBy: {
+                name: sub.createdBy?.username,
+                email: sub.createdBy?.email,
+                phone: sub.createdBy?.phone
+            }
+        }));
+
+        res.status(200).json({
+            message: "✅ جميع الاشتراكات",
+            count: formatted.length,
+            subscriptions: formatted
+        });
+
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({
+            message: "❌ حدث خطأ أثناء جلب الاشتراكات",
+            error: err.message
+        });
+    }
+};
+
+
+export const createPlan = async (req, res) => {
+    try {
+        const { name, days, price } = req.body;
+        const createdBy = req.user.id; // من التوكن
+
+        const plan = await PlanModel.create({
+            name,
+            days,
+            price,
+            createdBy
+        });
+
+        res.status(201).json({
+            success: true,
+            message: "Plan created successfully",
+            plan
+        });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+};
+
+
+export const getPlans = async (req, res) => {
+    try {
+        const plans = await PlanModel.find().sort({ createdAt: -1 });
+        res.json({ success: true, plans });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+};
+
+
+export const updatePlan = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { name, days, price } = req.body;
+
+        const updated = await PlanModel.findByIdAndUpdate(
+            id,
+            { name, days, price },
+            { new: true }
+        );
+
+        if (!updated) {
+            return res.status(404).json({ success: false, message: "Plan not found" });
+        }
+
+        res.json({ success: true, updated });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+};
+
+
+export const deletePlan = async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        const deleted = await PlanModel.findByIdAndDelete(id);
+
+        if (!deleted) {
+            return res.status(404).json({ success: false, message: "Plan not found" });
+        }
+
+        res.json({ success: true, message: "Plan deleted successfully" });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+};
