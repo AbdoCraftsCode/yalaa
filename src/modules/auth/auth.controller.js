@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { validation } from "../../middlewere/validation.middlewere.js";
 import  * as validators from "../auth/auth.validate.js"
-import { addQuestion, adduser, confirmOTP, createClass, generateShareLink, createFile, createImages, createSupject, getAllClasses, getAllImages, getAllRanks, GetFriendsList, getMyRank, Getprofiledata, getQuestionsByClassAndSubject, getSharedFile, getSubjectsByClass, getUserFiles, getUserRoleById, getUserStorageUsage, resendOTP, shareFile, signup, signupwithGmail, submitAnswer, incrementFileView, getShareLinkAnalytics, getUserAnalytics, updateProfile, getUserEarnings, deleteFile, updateFileName, withdrawEarnings, getWithdrawalHistory, getAllPromoters, getUserAnalyticsadmin, getUserEarningsadmin, getShareLinkAnalyticsadmin, getSharedFilesByUser, createCopyrightReport, getAllCopyrightReports, requestWithdrawal, getAllWithdrawals, saveFile, createChannel, subscribeToChannel, getMySubscribedChannels, createFilechannel, getUserFileschannel, updateUserEarningsByOwner, toggleBrimumeByOwner, createSubscription, getAllSubscriptions, createPlan, getPlans, deletePlan, updatePlan } from "./service/regestration.service.js";
+import { addQuestion, adduser, confirmOTP, createClass, generateShareLink, createFile, createImages, createSupject, getAllClasses, getAllImages, getAllRanks, GetFriendsList, getMyRank, Getprofiledata, getQuestionsByClassAndSubject, getSharedFile, getSubjectsByClass, getUserFiles, getUserRoleById, getUserStorageUsage, resendOTP, shareFile, signup, signupwithGmail, submitAnswer, incrementFileView, getShareLinkAnalytics, getUserAnalytics, updateProfile, getUserEarnings, deleteFile, updateFileName, withdrawEarnings, getWithdrawalHistory, getAllPromoters, getUserAnalyticsadmin, getUserEarningsadmin, getShareLinkAnalyticsadmin, getSharedFilesByUser, createCopyrightReport, getAllCopyrightReports, requestWithdrawal, getAllWithdrawals, saveFile, createChannel, subscribeToChannel, getMySubscribedChannels, createFilechannel, getUserFileschannel, updateUserEarningsByOwner, toggleBrimumeByOwner, createSubscription, getAllSubscriptions, createPlan, getPlans, deletePlan, updatePlan, getAllStorageStats, updateWithdrawalStatus, getApprovedWithdrawals, updateSinglePendingReward, updateAnalyticsData } from "./service/regestration.service.js";
 import { deleteUserById, forgetpassword,   login, loginwithGmail, refreshToken, resetpassword, toggleUserBanByOwner } from "./service/authontecation.service.js";
 import { authentication } from "../../middlewere/authontcation.middlewere.js";
 import { fileValidationTypes, uploadCloudFile } from "../../utlis/multer/cloud.multer.js";
@@ -14,6 +14,8 @@ const routr = Router()
 
 
 routr.post("/signup", signup)
+
+routr.get("/getAllStorageStats", getAllStorageStats)
 
 routr.post("/createImages",
    
@@ -100,6 +102,13 @@ routr.get(
 
 
 routr.post("/resendOTP", resendOTP)
+
+routr.patch("/updateAnalyticsData/:id", updateAnalyticsData)
+
+routr.get("/getApprovedWithdrawals", getApprovedWithdrawals)
+
+routr.patch("/updateWithdrawalStatus/:id", updateWithdrawalStatus)
+routr.patch("/updateSinglePendingReward/:analyticsId/:pendingId", updateSinglePendingReward)
 
 routr.post("/createPlan", authentication(), createPlan)
 

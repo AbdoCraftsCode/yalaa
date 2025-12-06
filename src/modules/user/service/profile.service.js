@@ -1043,7 +1043,6 @@ export const getAllUsers = asyncHandelr(async (req, res, next) => {
     });
 });
 
-
 export const sendnotification = asyncHandelr(async (req, res, next) => {
     const { _id, title, body } = req.body;
 
@@ -1053,27 +1052,45 @@ export const sendnotification = asyncHandelr(async (req, res, next) => {
 
     try {
         const user = await Usermodel.findById(_id);
-        if (!user || !user.fcmToken) {
-            return res.status(404).json({ message: "المستخدم غير موجود أو لا يحتوي على FCM Token" });
+
+        // سجّل الإشعار في قاعدة البيانات بغض النظر عن الإرسال
+        await NotificationModel.create({ user: _id, title, body });
+
+        let response = null;
+
+        // لو عنده FCM Token ابعت الإشعار
+        if (user && user.fcmToken) {
+            const message = {
+                notification: { title, body },
+                token: user.fcmToken,
+            };
+
+            try {
+                response = await admin.messaging().send(message);
+                console.log("✅ تم إرسال الإشعار:", response);
+            } catch (err) {
+                console.log("⚠️ فشل الإرسال لكن الإشعار اتسجل:", err.message);
+            }
+        } else {
+            console.log("⚠️ المستخدم لا يملك FCM Token — تم تسجيل الإشعار فقط");
         }
 
-        const message = {
-            notification: { title, body },
-            token: user.fcmToken,
-        };
+        // رجّع Success دائمًا
+        res.json({
+            message: "تم إنشاء الإشعار بنجاح",
+            sent: !!response,
+            response: response || "لم يتم الإرسال لعدم وجود FCM Token"
+        });
 
-        await NotificationModel.create({ user: user._id, title, body });
-
-        const response = await admin.messaging().send(message);
-        console.log('✅ تم إرسال الإشعار:', response);
-
-        res.json({ message: "تم إرسال الإشعار بنجاح", response });
     } catch (error) {
-        console.error('❌ فشل إرسال الإشعار:', error);
-        res.status(500).json({ message: "فشل إرسال الإشعار", error: error.message });
+        console.error("❌ خطأ:", error);
+        res.status(500).json({
+            message: "فشل إرسال الإشعار",
+            error: error.message
+        });
     }
-
 });
+
 
 
 export const notifyall = asyncHandelr(async (req, res, next) => {

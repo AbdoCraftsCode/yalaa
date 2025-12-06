@@ -28,6 +28,7 @@ router.post("/createFolder", authentication(), createFolder)
 router.post("/savetoken", savetoken)
 router.post("/notifyall", notifyall)
 router.post("/sendnotification", sendnotification)
+
 router.post("/markAllAsRead", authentication(),markAllAsRead)
 router.get("/getUserFolders", authentication(), getUserFolders)
 
