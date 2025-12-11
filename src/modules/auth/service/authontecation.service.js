@@ -486,3 +486,38 @@ export const deleteUserById = asyncHandelr(async (req, res) => {
 
 
 
+// API لجلب إحصائيات المستخدمين
+// API لجلب إحصائيات المستخدمين
+export const getUserStats = asyncHandelr(async (req, res) => {
+    try {
+        // عدد كل المستخدمين
+        const totalUsers = await Usermodel.countDocuments();
+
+        // عدد المستخدمين المسجلين في آخر 30 يوم
+        const thirtyDaysAgo = new Date();
+        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+        const usersLast30Days = await Usermodel.countDocuments({
+            createdAt: { $gte: thirtyDaysAgo },
+        });
+
+        // عدد المستخدمين الذين لديهم isPromoter = true
+        const promotersCount = await Usermodel.countDocuments({ isPromoter: true });
+
+        // عدد المستخدمين الذين لديهم isBrimume = true
+        const brimumeCount = await Usermodel.countDocuments({ isBrimume: true });
+
+        res.status(200).json({
+            success: true,
+            data: {
+                totalUsers,
+                usersLast30Days,
+                promotersCount,
+                brimumeCount,  // 👈 تمت إضافته
+            },
+        });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+});
+
+

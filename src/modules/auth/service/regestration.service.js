@@ -931,7 +931,43 @@ export const getAllCopyrightReports = async (req, res, next) => {
         });
     }
 };
+export const deleteCopyrightReport = asyncHandelr(async (req, res) => {
+    const { reportId } = req.params;
 
+    // تحقق إن صاحب الطلب هو Owner
+    const owner = await Usermodel.findById(req.user._id);
+    if (!owner || owner.role !== "Owner") {
+        return res.status(403).json({ message: "❌ ليس لديك صلاحية الحذف." });
+    }
+
+    // التحقق من وجود البلاغ
+    const report = await CopyrightReportModel.findById(reportId);
+    if (!report) {
+        return res.status(404).json({ message: "❌ البلاغ غير موجود." });
+    }
+
+    // لو البلاغ يحتوي على ملف مرفوع في Cloudinary → احذفه
+    if (report.url) {
+        try {
+            // استخراج public_id من رابط Cloudinary
+            const publicId = report.url.split("/").pop().split(".")[0];
+
+            await cloud.uploader.destroy(`copyright-reports/${publicId}`, {
+                resource_type: "raw"
+            });
+        } catch (err) {
+            console.error("خطأ أثناء حذف الملف من Cloudinary:", err.message);
+        }
+    }
+
+    // حذف البلاغ من قاعدة البيانات
+    await CopyrightReportModel.findByIdAndDelete(reportId);
+
+    res.status(200).json({
+        message: "✅ تم حذف البلاغ بنجاح.",
+        deletedReportId: reportId,
+    });
+});
 
 export const deleteFile = async (req, res) => {
     try {
