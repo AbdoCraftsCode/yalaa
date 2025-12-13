@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { validation } from "../../middlewere/validation.middlewere.js";
 import  * as validators from "../auth/auth.validate.js"
-import { addQuestion, adduser, confirmOTP, createClass, generateShareLink, createFile, createImages, createSupject, getAllClasses, getAllImages, getAllRanks, GetFriendsList, getMyRank, Getprofiledata, getQuestionsByClassAndSubject, getSharedFile, getSubjectsByClass, getUserFiles, getUserRoleById, getUserStorageUsage, resendOTP, shareFile, signup, signupwithGmail, submitAnswer, incrementFileView, getShareLinkAnalytics, getUserAnalytics, updateProfile, getUserEarnings, deleteFile, updateFileName, withdrawEarnings, getWithdrawalHistory, getAllPromoters, getUserAnalyticsadmin, getUserEarningsadmin, getShareLinkAnalyticsadmin, getSharedFilesByUser, createCopyrightReport, getAllCopyrightReports, requestWithdrawal, getAllWithdrawals, saveFile, createChannel, subscribeToChannel, getMySubscribedChannels, createFilechannel, getUserFileschannel, updateUserEarningsByOwner, toggleBrimumeByOwner, createSubscription, getAllSubscriptions, createPlan, getPlans, deletePlan, updatePlan, getAllStorageStats, updateWithdrawalStatus, getApprovedWithdrawals, updateSinglePendingReward, updateAnalyticsData, deleteCopyrightReport, getUserWithdrawals } from "./service/regestration.service.js";
+import { addQuestion, adduser, confirmOTP, createClass, generateShareLink, createFile, createImages, createSupject, getAllClasses, getAllImages, getAllRanks, GetFriendsList, getMyRank, Getprofiledata, getQuestionsByClassAndSubject, getSharedFile, getSubjectsByClass, getUserFiles, getUserRoleById, getUserStorageUsage, resendOTP, shareFile, signup, signupwithGmail, submitAnswer, incrementFileView, getShareLinkAnalytics, getUserAnalytics, updateProfile, getUserEarnings, deleteFile, updateFileName, withdrawEarnings, getWithdrawalHistory, getAllPromoters, getUserAnalyticsadmin, getUserEarningsadmin, getShareLinkAnalyticsadmin, getSharedFilesByUser, createCopyrightReport, getAllCopyrightReports, requestWithdrawal, getAllWithdrawals, saveFile, createChannel, subscribeToChannel, getMySubscribedChannels, createFilechannel, getUserFileschannel, updateUserEarningsByOwner, toggleBrimumeByOwner, createSubscription, getAllSubscriptions, createPlan, getPlans, deletePlan, updatePlan, getAllStorageStats, updateWithdrawalStatus, getApprovedWithdrawals, updateSinglePendingReward, updateAnalyticsData, deleteCopyrightReport, getUserWithdrawals, getShareLinkAnalyticdownloads } from "./service/regestration.service.js";
 import { deleteUserById, forgetpassword,   getUserStats,   login, loginwithGmail, refreshToken, resetpassword, toggleUserBanByOwner } from "./service/authontecation.service.js";
 import { authentication } from "../../middlewere/authontcation.middlewere.js";
 import { fileValidationTypes, uploadCloudFile } from "../../utlis/multer/cloud.multer.js";
@@ -126,6 +126,8 @@ routr.get("/getAllSubscriptions", getAllSubscriptions)
 
 routr.patch("/updateProfile", authentication(), updateProfile)
 routr.delete("/deleteFile/:fileId", authentication(), deleteFile)
+
+routr.get("/getShareLinkAnalyticdownloads/:userId", authentication(), getShareLinkAnalyticdownloads)
 
 routr.get("/getUserWithdrawals", authentication(), getUserWithdrawals)
 

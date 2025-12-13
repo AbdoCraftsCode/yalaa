@@ -2820,6 +2820,74 @@ export const getShareLinkAnalyticsadmin = async (req, res) => {
 };
 
 
+export const getShareLinkAnalyticdownloads = async (req, res) => {
+    try {
+        const userId = req.params.userId; // ✅ استخدام _id من params
+
+        if (!userId) {
+            return res.status(400).json({ message: '❌ يجب إرسال معرف المستخدم.' });
+        }
+
+        const files = await File.find({ userId, shared: true }).select('_id fileName sharedUrl');
+
+        if (!files || files.length === 0) {
+            return res.status(404).json({
+                message: '❌ لا توجد ملفات مشتركة لهذا المستخدم.',
+                analytics: [],
+            });
+        }
+
+        const fileIds = files.map(file => file._id);
+
+        const analytics = await FileShareAnalytics.find({ fileId: { $in: fileIds } })
+            .select('fileId downloads views lastUpdated viewers');
+
+        const userAnalytics = files.map(file => {
+            const analytic = analytics.find(a => a.fileId.toString() === file._id.toString());
+
+            let viewsByCountry = [];
+            let downloadsByCountry = [];
+
+            if (analytic?.viewers?.length > 0) {
+                viewsByCountry = analytic.viewers.map(viewer => ({
+                    country: viewer.country || 'Unknown',
+                    views: viewer.views || 1,
+                }));
+
+                downloadsByCountry = analytic.viewers.map(viewer => ({
+                    country: viewer.country || 'Unknown',
+                    downloads: viewer.downloads || 0,
+                    earnings: viewer.earnings || 0,
+                }));
+            }
+
+            return {
+                fileId: file._id,
+                fileName: file.fileName,
+                sharedUrl: file.sharedUrl,
+                downloads: analytic ? analytic.downloads : 0,
+                views: analytic ? analytic.views : 0,
+                lastUpdated: analytic ? analytic.lastUpdated : null,
+                // viewsByCountry,
+                downloadsByCountry
+            };
+        });
+
+        return res.status(200).json({
+            message: '✅ تم جلب بيانات التحليلات بنجاح',
+            analytics: userAnalytics,
+        });
+    } catch (err) {
+        console.error('Error in getShareLinkAnalytics:', err);
+        return res.status(500).json({
+            message: '❌ حدث خطأ أثناء جلب بيانات التحليلات',
+            error: err.message,
+        });
+    }
+};
+
+
+
 
 export const requestWithdrawal = async (req, res) => {
     try {

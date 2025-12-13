@@ -29,7 +29,13 @@ const FileShareAnalyticsSchema = new mongoose.Schema({
             earnings: { type: Number, default: 0 },
         }
     ],
-
+    dounloads: [
+        {
+            country: { type: String },
+            dounloads: { type: Number, default: 1 },
+            earnings: { type: Number, default: 0 },
+        }
+    ],
     pendingRewards: [
         {
             amount: Number,
