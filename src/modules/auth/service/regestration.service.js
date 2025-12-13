@@ -2860,7 +2860,36 @@ export const requestWithdrawal = async (req, res) => {
 
 
 
+export const getUserWithdrawals = async (req, res) => {
+    try {
+        const userId = req.user._id; // من التوكن
+        const { status } = req.query; // فلتر الحالة (اختياري)
 
+        const filter = { userId };
+
+        // فلترة بالحالة لو موجودة
+        if (status) {
+            filter.status = status;
+        }
+
+        const withdrawals = await withdrawalRequestSchemaModel
+            .find(filter)
+            .sort({ createdAt: -1 });
+
+        res.status(200).json({
+            success: true,
+            count: withdrawals.length,
+            data: withdrawals
+        });
+
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: "حدث خطأ أثناء جلب السحوبات",
+            error: error.message
+        });
+    }
+};
 
 
 export const getAllWithdrawals = async (req, res) => {
