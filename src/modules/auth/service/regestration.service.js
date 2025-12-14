@@ -41,6 +41,7 @@ import { ChannelModel } from "../../../DB/models/ChannelModel.js";
 import SubscriptionModell from "../../../DB/models/subscriptionSchemausers.js";
 import { PlanModel } from "../../../DB/models/PlanSchema.js";
 import { Folder } from "../../../DB/models/foldeer.model.js";
+import PaymentServiceSchemaa from "../../../DB/models/PaymentServiceSchemaa.js";
 
 // export const signup = asyncHandelr(async (req, res, next) => {
     
@@ -2921,6 +2922,80 @@ export const requestWithdrawal = async (req, res) => {
     } catch (err) {
         console.error("Error in requestWithdrawal:", err);
         return res.status(500).json({ message: "❌ حدث خطأ أثناء إرسال طلب السحب", error: err.message });
+    }
+};
+
+
+
+
+
+export const createPaymentService = async (req, res) => {
+    try {
+        const {
+            paymentType,
+            credentials,
+            accountName,
+            isActive,
+            isDefault,
+            note
+        } = req.body;
+
+        if (!paymentType) {
+            return res.status(400).json({
+                success: false,
+                message: "paymentType مطلوب"
+            });
+        }
+
+        // لو الخدمة افتراضية → الغي الافتراضية من الباقي
+        if (isDefault === true) {
+            await PaymentServiceSchemaa.updateMany(
+                {},
+                { isDefault: false }
+            );
+        }
+
+        const paymentService = await PaymentServiceSchemaa.create({
+            paymentType,
+            credentials,
+            accountName,
+            isActive,
+            isDefault,
+            note
+        });
+
+        return res.status(201).json({
+            success: true,
+            message: "تم إنشاء خدمة الدفع بنجاح",
+            data: paymentService
+        });
+
+    } catch (error) {
+        return res.status(500).json({
+            success: false,
+            message: "خطأ في السيرفر",
+            error: error.message
+        });
+    }
+};
+
+
+
+export const getPaymentServices = async (req, res) => {
+    try {
+        const services = await PaymentServiceSchemaa.find().sort({ createdAt: -1 });
+
+        return res.status(200).json({
+            success: true,
+            data: services
+        });
+
+    } catch (error) {
+        return res.status(500).json({
+            success: false,
+            message: "خطأ في السيرفر",
+            error: error.message
+        });
     }
 };
 
