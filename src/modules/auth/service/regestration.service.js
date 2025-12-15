@@ -2999,7 +2999,73 @@ export const getPaymentServices = async (req, res) => {
     }
 };
 
+export const deletePaymentService = async (req, res) => {
+    try {
+        const { id } = req.params;
 
+        const deletedService = await PaymentServiceSchemaa.findByIdAndDelete(id);
+
+        if (!deletedService) {
+            return res.status(404).json({
+                success: false,
+                message: "خدمة الدفع غير موجودة"
+            });
+        }
+
+        return res.status(200).json({
+            success: true,
+            message: "تم حذف خدمة الدفع بنجاح"
+        });
+
+    } catch (error) {
+        return res.status(500).json({
+            success: false,
+            message: "خطأ في السيرفر",
+            error: error.message
+        });
+    }
+};
+
+
+export const updatePaymentService = async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        // لو هتتحدد كافتراضية
+        if (req.body.isDefault === true) {
+            await PaymentService.updateMany(
+                {},
+                { isDefault: false }
+            );
+        }
+
+        const updatedService = await PaymentServiceSchemaa.findByIdAndUpdate(
+            id,
+            req.body,
+            { new: true }
+        );
+
+        if (!updatedService) {
+            return res.status(404).json({
+                success: false,
+                message: "خدمة الدفع غير موجودة"
+            });
+        }
+
+        return res.status(200).json({
+            success: true,
+            message: "تم تحديث خدمة الدفع بنجاح",
+            data: updatedService
+        });
+
+    } catch (error) {
+        return res.status(500).json({
+            success: false,
+            message: "خطأ في السيرفر",
+            error: error.message
+        });
+    }
+};
 
 
 
