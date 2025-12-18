@@ -10,6 +10,7 @@ import axios from 'axios';
 import { nanoid, customAlphabet } from "nanoid";
 import { vervicaionemailtemplet } from "../../../utlis/temblete/vervication.email.js";
 import { sendemail } from "../../../utlis/email/sendemail.js";
+import { Folder } from "../../../DB/models/foldeer.model.js";
 export const login = asyncHandelr(async (req, res, next) => {
     const { email, password } = req.body;
     console.log(email, password);
@@ -518,6 +519,66 @@ export const getUserStats = asyncHandelr(async (req, res) => {
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
     }
+});
+import archiver from 'archiver';
+import File from "../../../DB/models/files.conrroller.js";
+
+
+
+
+export const createZip = asyncHandelr(async (req, res) => {
+    const userId = req.user._id;
+    const { items } = req.body; // array من { type: 'file'|'folder', id: 'objectId' }
+
+    if (!items || !Array.isArray(items) || items.length === 0) {
+        return res.status(400).json({ message: "❌ حدد ملفات أو مجلدات للZIP" });
+    }
+
+    // إعداد الZIP
+    res.setHeader('Content-Type', 'application/zip');
+    const zipName = `my-files-${Date.now()}.zip`;
+    res.setHeader('Content-Disposition', `attachment; filename="${zipName}"`);
+
+    const archive = archiver('zip', { zlib: { level: 9 } });
+    archive.pipe(res); // إرسال الZIP مباشرة
+
+    archive.on('error', (err) => {
+        throw err;
+    });
+
+    // دالة مساعدة لإضافة مجلد متداخل
+    const addFolderContents = async (folderId, basePath = '') => {
+        const folder = await Folder.findById(folderId);
+        if (!folder || folder.userId.toString() !== userId.toString()) return;
+
+        // إضافة ملفات المجلد
+        const files = await File.find({ folderId });
+        for (const file of files) {
+            if (file.userId.toString() !== userId.toString()) continue;
+            const response = await axios.get(file.url, { responseType: 'stream' });
+            archive.append(response.data, { name: `${basePath}${file.fileName}` });
+        }
+
+        // إضافة مجلدات فرعية (recursion)
+        const subFolders = await Folder.find({ parentFolder: folderId });
+        for (const sub of subFolders) {
+            await addFolderContents(sub._id, `${basePath}${sub.name}/`);
+        }
+    };
+
+    // معالجة العناصر المختارة
+    for (const item of items) {
+        if (item.type === 'file') {
+            const file = await File.findById(item.id);
+            if (!file || file.userId.toString() !== userId.toString()) continue;
+            const response = await axios.get(file.url, { responseType: 'stream' });
+            archive.append(response.data, { name: file.fileName });
+        } else if (item.type === 'folder') {
+            await addFolderContents(item.id, '');
+        }
+    }
+
+    archive.finalize(); // إغلاق الZIP وإرساله
 });
 
 

@@ -2633,7 +2633,7 @@ export const getAllRanks = asyncHandelr(async (req, res, next) => {
 export const getAllPromoters = async (req, res) => {
     try {
         const promoters = await Usermodel.find({ isPromoter: true })
-            .select("_id email Downloadsplan watchingplan username");
+            .select("_id email Downloadsplan watchingplan username isBrimume");
 
         return res.status(200).json({
             message: "✅ تم جلب المستخدمين المروجين بنجاح",
