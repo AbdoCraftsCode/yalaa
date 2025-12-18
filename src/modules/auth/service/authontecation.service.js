@@ -11,6 +11,7 @@ import { nanoid, customAlphabet } from "nanoid";
 import { vervicaionemailtemplet } from "../../../utlis/temblete/vervication.email.js";
 import { sendemail } from "../../../utlis/email/sendemail.js";
 import { Folder } from "../../../DB/models/foldeer.model.js";
+import cloud from "../../../utlis/multer/cloudinary.js"
 export const login = asyncHandelr(async (req, res, next) => {
     const { email, password } = req.body;
     console.log(email, password);
@@ -522,36 +523,29 @@ export const getUserStats = asyncHandelr(async (req, res) => {
 });
 import archiver from 'archiver';
 import File from "../../../DB/models/files.conrroller.js";
-
+import { ZipFile } from "../../../DB/models/zipFileSchema.js";
+import { PassThrough } from 'stream';
 
 
 
 export const createZip = asyncHandelr(async (req, res) => {
     const userId = req.user._id;
-    const { items } = req.body; // array من { type: 'file'|'folder', id: 'objectId' }
+    const { items, shared = false } = req.body;
 
     if (!items || !Array.isArray(items) || items.length === 0) {
         return res.status(400).json({ message: "❌ حدد ملفات أو مجلدات للZIP" });
     }
 
-    // إعداد الZIP
-    res.setHeader('Content-Type', 'application/zip');
-    const zipName = `my-files-${Date.now()}.zip`;
-    res.setHeader('Content-Disposition', `attachment; filename="${zipName}"`);
-
+    // إنشاء archive
     const archive = archiver('zip', { zlib: { level: 9 } });
-    archive.pipe(res); // إرسال الZIP مباشرة
+    const passThrough = new PassThrough();
+    archive.pipe(passThrough);
 
-    archive.on('error', (err) => {
-        throw err;
-    });
-
-    // دالة مساعدة لإضافة مجلد متداخل
+    // دالة إضافة مجلد (نفس اللي عندك)
     const addFolderContents = async (folderId, basePath = '') => {
         const folder = await Folder.findById(folderId);
         if (!folder || folder.userId.toString() !== userId.toString()) return;
 
-        // إضافة ملفات المجلد
         const files = await File.find({ folderId });
         for (const file of files) {
             if (file.userId.toString() !== userId.toString()) continue;
@@ -559,14 +553,13 @@ export const createZip = asyncHandelr(async (req, res) => {
             archive.append(response.data, { name: `${basePath}${file.fileName}` });
         }
 
-        // إضافة مجلدات فرعية (recursion)
         const subFolders = await Folder.find({ parentFolder: folderId });
         for (const sub of subFolders) {
             await addFolderContents(sub._id, `${basePath}${sub.name}/`);
         }
     };
 
-    // معالجة العناصر المختارة
+    // إضافة العناصر
     for (const item of items) {
         if (item.type === 'file') {
             const file = await File.findById(item.id);
@@ -578,7 +571,116 @@ export const createZip = asyncHandelr(async (req, res) => {
         }
     }
 
-    archive.finalize(); // إغلاق الZIP وإرساله
+    archive.finalize();
+
+    // جمع الـ ZIP في buffer
+    const chunks = [];
+    for await (const chunk of passThrough) {
+        chunks.push(chunk);
+    }
+    const zipBuffer = Buffer.concat(chunks);
+
+    const fileSizeMB = Math.ceil(zipBuffer.length / (1024 * 1024));
+    const zipFileName = `my-files-${Date.now()}.zip`;
+
+    // رفع على Cloudinary
+    const uploadResult = await new Promise((resolve, reject) => {
+        const uploadStream = cloud.uploader.upload_stream(
+            {
+                resource_type: "raw",
+                folder: "cloudbox/zips",
+                type: "upload",              // ← مهم جدًا: "upload" مش "authenticated"
+                access_mode: "public",
+                public_id: `zip-${Date.now()}`,
+                format: "zip"
+            },
+            (error, result) => error ? reject(error) : resolve(result)
+        );
+        uploadStream.end(zipBuffer);
+    });
+
+    // إنشاء رابط مشاركة لو مطلوب
+    let sharedUrl = null;
+    if (shared) {
+        const uniqueId = nanoid(12);
+        sharedUrl = `https://proplem-production.up.railway.app/shared-zip/${uniqueId}`;
+    }
+
+    // حفظ في الداتابيز
+    const savedZip = await ZipFile.create({
+        userId,
+        fileName: zipFileName,
+        fileSize: fileSizeMB,
+        url: uploadResult.secure_url,
+        shared,
+        sharedUrl,
+        items // نحفظ إيه جوا الـ ZIP
+    });
+
+    // إرسال الـ ZIP للتنزيل
+    res.setHeader('Content-Type', 'application/zip');
+    res.setHeader('Content-Disposition', `attachment; filename="${zipFileName}"`);
+    res.send(zipBuffer);
+
+    // اختياري: ممكن ترجع JSON مع معلومات الـ ZIP لو عايز
+    // بس الـ download أولوية
 });
 
 
+
+export const getMyZips = asyncHandelr(async (req, res) => {
+    const userId = req.user._id;
+
+    const myZips = await ZipFile.find({ userId })
+        .sort({ createdAt: -1 }) // الأحدث أولاً
+        .select('fileName fileSize url shared sharedUrl createdAt items'); // نختار الحقول المفيدة
+
+    if (myZips.length === 0) {
+        return res.status(200).json({
+            message: "📭 لم تقم بإنشاء أي ملف ZIP بعد",
+            zips: [],
+            count: 0
+        });
+    }
+
+    res.status(200).json({
+        message: "✅ تم جلب ملفات ZIP بنجاح",
+        count: myZips.length,
+        zips: myZips
+    });
+});
+
+
+export const downloadZip = asyncHandelr(async (req, res) => {
+    const userId = req.user._id;
+    const { zipId } = req.params;
+
+    const zipFile = await ZipFile.findById(zipId);
+
+    if (!zipFile) {
+        return res.status(404).json({ message: "❌ ملف ZIP غير موجود" });
+    }
+
+    if (zipFile.userId.toString() !== userId.toString()) {
+        return res.status(403).json({ message: "❌ غير مصرح لك بتنزيل هذا الملف" });
+    }
+
+    // إعداد headers للتنزيل
+    res.setHeader('Content-Type', 'application/zip');
+    res.setHeader('Content-Disposition', `attachment; filename="${zipFile.fileName}"`);
+
+    // جلب الـ ZIP من Cloudinary وإرساله مباشرة (streaming)
+    const response = await axios.get(zipFile.url, {
+        responseType: 'stream'
+    });
+
+    response.data.pipe(res);
+
+    // معالجة الأخطاء أثناء الـ streaming
+    response.data.on('error', (err) => {
+        console.error("Error streaming ZIP:", err);
+        if (!res.headersSent) {
+            res.status(500).json({ message: "❌ خطأ أثناء تنزيل الملف" });
+        }
+    });
+});
