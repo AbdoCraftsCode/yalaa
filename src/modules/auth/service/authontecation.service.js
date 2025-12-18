@@ -525,6 +525,7 @@ import archiver from 'archiver';
 import File from "../../../DB/models/files.conrroller.js";
 import { ZipFile } from "../../../DB/models/zipFileSchema.js";
 import { PassThrough } from 'stream';
+import { Archive } from "../../../DB/models/archiveSchema.js";
 
 
 
@@ -682,5 +683,116 @@ export const downloadZip = asyncHandelr(async (req, res) => {
         if (!res.headersSent) {
             res.status(500).json({ message: "❌ خطأ أثناء تنزيل الملف" });
         }
+    });
+});
+
+
+
+
+export const createArchive = asyncHandelr(async (req, res) => {
+    const { files = [], folders = [] } = req.body; // arrays من IDs
+    const userId = req.user._id;
+
+    if (files.length === 0 && folders.length === 0) {
+        return res.status(400).json({ message: "❌ أضف ملفات أو مجلدات على الأقل للأرشيف" });
+    }
+
+    const newArchive = await Archive.create({
+        userId,
+        files,
+        folders
+    });
+
+    // populate التفاصيل لو عايز ترجعها فورًا (اختياري)
+    await newArchive.populate([
+        { path: 'files', select: 'fileName url fileType fileSize' },
+        { path: 'folders', select: 'name createdAt' }
+    ]);
+
+    res.status(201).json({
+        message: "✅ تم إنشاء الأرشيف بنجاح",
+        archive: newArchive
+    });
+});
+
+
+// @desc    جلب كل الأرشيفات الخاصة بالمستخدم مع تفاصيل الملفات والمجلدات
+// @route   GET /api/archives/my
+// @access  Private
+export const getMyArchives = asyncHandelr(async (req, res) => {
+    const userId = req.user._id;
+
+    const archives = await Archive.find({ userId })
+        .sort({ createdAt: -1 }) // الأحدث أولاً
+        .populate([
+            { path: 'files', select: 'fileName url fileType fileSize createdAt' },
+            { path: 'folders', select: 'name createdAt shared' }
+        ])
+        .lean();
+
+    if (archives.length === 0) {
+        return res.status(200).json({
+            message: "📭 لا توجد أرشيفات حاليًا",
+            count: 0,
+            data: []
+        });
+    }
+
+    res.status(200).json({
+        message: "✅ تم جلب أرشيفاتك بنجاح",
+        count: archives.length,
+        data: archives
+    });
+});
+
+
+export const removeFromArchive = asyncHandelr(async (req, res) => {
+    const { archiveId } = req.params;
+    const { files = [], folders = [] } = req.body; // arrays من IDs اللي عايز تحذفها
+    const userId = req.user._id;
+
+    if (files.length === 0 && folders.length === 0) {
+        return res.status(400).json({
+            message: "❌ حدد ملفات أو مجلدات على الأقل لحذفها من الأرشيف"
+        });
+    }
+
+    // البحث عن الأرشيف
+    const archive = await Archive.findById(archiveId);
+
+    if (!archive) {
+        return res.status(404).json({ message: "❌ الأرشيف غير موجود" });
+    }
+
+    // التأكد من ملكية المستخدم
+    if (archive.userId.toString() !== userId.toString()) {
+        return res.status(403).json({ message: "❌ غير مصرح لك بتعديل هذا الأرشيف" });
+    }
+
+    // حذف الملفات المحددة
+    if (files.length > 0) {
+        archive.files = archive.files.filter(
+            fileId => !files.includes(fileId.toString())
+        );
+    }
+
+    // حذف المجلدات المحددة
+    if (folders.length > 0) {
+        archive.folders = archive.folders.filter(
+            folderId => !folders.includes(folderId.toString())
+        );
+    }
+
+    await archive.save();
+
+    // populate التفاصيل بعد الحذف (اختياري)
+    await archive.populate([
+        { path: 'files', select: 'fileName url fileType fileSize' },
+        { path: 'folders', select: 'name createdAt' }
+    ]);
+
+    res.status(200).json({
+        message: "✅ تم حذف العناصر من الأرشيف بنجاح",
+        archive
     });
 });
