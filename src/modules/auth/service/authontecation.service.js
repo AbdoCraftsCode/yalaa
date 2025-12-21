@@ -629,12 +629,15 @@ export const createZip = asyncHandelr(async (req, res) => {
 
 
 
+
 export const getMyZips = asyncHandelr(async (req, res) => {
     const userId = req.user._id;
 
+    // جلب الـ ZIPs مع items فقط
     const myZips = await ZipFile.find({ userId })
-        .sort({ createdAt: -1 }) // الأحدث أولاً
-        .select('fileName fileSize url shared sharedUrl createdAt items'); // نختار الحقول المفيدة
+        .sort({ createdAt: -1 })
+        .select('fileName fileSize url shared sharedUrl createdAt items')
+        .lean();
 
     if (myZips.length === 0) {
         return res.status(200).json({
@@ -644,12 +647,86 @@ export const getMyZips = asyncHandelr(async (req, res) => {
         });
     }
 
+    // جمع كل IDs الملفات والمجلدات من كل الـ ZIPs
+    const allFileIds = [];
+    const allFolderIds = [];
+
+    myZips.forEach(zip => {
+        zip.items.forEach(item => {
+            if (item.type === 'file') {
+                allFileIds.push(item.id);
+            } else if (item.type === 'folder') {
+                allFolderIds.push(item.id);
+            }
+        });
+    });
+
+    // جلب التفاصيل الكاملة للملفات والمجلدات مرة واحدة
+    const [filesData, foldersData] = await Promise.all([
+        File.find({ _id: { $in: allFileIds } })
+            .select('fileName url fileType fileSize createdAt folderId')
+            .lean(),
+        Folder.find({ _id: { $in: allFolderIds } })
+            .select('name createdAt')
+            .lean()
+    ]);
+
+    // تحويل البيانات لـ map عشان الوصول السريع
+    const filesMap = new Map(filesData.map(f => [f._id.toString(), f]));
+    const foldersMap = new Map(foldersData.map(f => [f._id.toString(), f]));
+
+    // تنظيم الـ ZIPs مع التفاصيل الكاملة
+    const formattedZips = myZips.map(zip => {
+        const files = [];
+        const folders = [];
+
+        zip.items.forEach(item => {
+            if (item.type === 'file') {
+                const file = filesMap.get(item.id.toString());
+                if (file) {
+                    files.push({
+                        _id: file._id,
+                        fileName: file.fileName,
+                        fileType: file.fileType,
+                        fileSize: file.fileSize,
+                        url: file.url,
+                        createdAt: file.createdAt
+                    });
+                }
+            } else if (item.type === 'folder') {
+                const folder = foldersMap.get(item.id.toString());
+                if (folder) {
+                    folders.push({
+                        _id: folder._id,
+                        name: folder.name,
+                        createdAt: folder.createdAt
+                    });
+                }
+            }
+        });
+
+        return {
+            _id: zip._id,
+            fileName: zip.fileName,
+            fileSize: zip.fileSize,
+            url: zip.url,
+            shared: zip.shared,
+            sharedUrl: zip.sharedUrl,
+            createdAt: zip.createdAt,
+            content: {
+                files,
+                folders
+            }
+        };
+    });
+
     res.status(200).json({
-        message: "✅ تم جلب ملفات ZIP بنجاح",
-        count: myZips.length,
-        zips: myZips
+        message: "✅ تم جلب ملفات ZIP بنجاح مع محتوياتها الكاملة",
+        count: formattedZips.length,
+        zips: formattedZips
     });
 });
+
 
 
 export const downloadZip = asyncHandelr(async (req, res) => {
@@ -697,23 +774,78 @@ export const createArchive = asyncHandelr(async (req, res) => {
         return res.status(400).json({ message: "❌ أضف ملفات أو مجلدات على الأقل للأرشيف" });
     }
 
+    // التأكد من ملكية الملفات والمجلدات
+    if (files.length > 0) {
+        const ownedFiles = await File.find({ _id: { $in: files }, userId });
+        if (ownedFiles.length !== files.length) {
+            return res.status(403).json({ message: "❌ بعض الملفات غير مملوكة لك" });
+        }
+    }
+
+    if (folders.length > 0) {
+        const ownedFolders = await Folder.find({ _id: { $in: folders }, userId });
+        if (ownedFolders.length !== folders.length) {
+            return res.status(403).json({ message: "❌ بعض المجلدات غير مملوكة لك" });
+        }
+    }
+
+    // إنشاء الأرشيف
     const newArchive = await Archive.create({
         userId,
         files,
         folders
     });
 
-    // populate التفاصيل لو عايز ترجعها فورًا (اختياري)
+    // populate التفاصيل
     await newArchive.populate([
-        { path: 'files', select: 'fileName url fileType fileSize' },
-        { path: 'folders', select: 'name createdAt' }
+        { path: 'files', select: 'fileName url fileType fileSize isArchive' },
+        { path: 'folders', select: 'name createdAt isArchive' }
     ]);
 
+    // ✅ تحديث isArchive = true للملفات والمجلدات (بدل الحذف)
+    if (files.length > 0) {
+        await File.updateMany(
+            { _id: { $in: files } },
+            { $set: { isArchive: true } }
+        );
+        console.log(`📦 تم وضع علامة أرشيف على ${files.length} ملف(ات)`);
+    }
+
+    if (folders.length > 0) {
+        // تحديث isArchive للمجلدات + كل المجلدات الفرعية + الملفات داخلها
+        const markFolderAndContentsAsArchived = async (folderId) => {
+            // تحديث الملفات داخل المجلد
+            await File.updateMany(
+                { folderId },
+                { $set: { isArchive: true } }
+            );
+
+            // جلب المجلدات الفرعية وتحديثها متكررًا
+            const subFolders = await Folder.find({ parentFolder: folderId });
+            for (const sub of subFolders) {
+                await markFolderAndContentsAsArchived(sub._id);
+            }
+
+            // تحديث المجلد نفسه
+            await Folder.findByIdAndUpdate(folderId, { isArchive: true });
+        };
+
+        for (const folderId of folders) {
+            await markFolderAndContentsAsArchived(folderId);
+        }
+
+        console.log(`📦 تم وضع علامة أرشيف على ${folders.length} مجلد(ات) وكل محتواها`);
+    }
+
     res.status(201).json({
-        message: "✅ تم إنشاء الأرشيف بنجاح",
+        message: "✅ تم إنشاء الأرشيف بنجاح والعناصر تم نقلها إلى الأرشيف (تم وضع علامة isArchive)",
         archive: newArchive
     });
 });
+
+
+
+
 
 
 // @desc    جلب كل الأرشيفات الخاصة بالمستخدم مع تفاصيل الملفات والمجلدات
@@ -748,7 +880,7 @@ export const getMyArchives = asyncHandelr(async (req, res) => {
 
 export const removeFromArchive = asyncHandelr(async (req, res) => {
     const { archiveId } = req.params;
-    const { files = [], folders = [] } = req.body; // arrays من IDs اللي عايز تحذفها
+    const { files = [], folders = [] } = req.body;
     const userId = req.user._id;
 
     if (files.length === 0 && folders.length === 0) {
@@ -757,42 +889,90 @@ export const removeFromArchive = asyncHandelr(async (req, res) => {
         });
     }
 
-    // البحث عن الأرشيف
     const archive = await Archive.findById(archiveId);
-
     if (!archive) {
         return res.status(404).json({ message: "❌ الأرشيف غير موجود" });
     }
 
-    // التأكد من ملكية المستخدم
     if (archive.userId.toString() !== userId.toString()) {
         return res.status(403).json({ message: "❌ غير مصرح لك بتعديل هذا الأرشيف" });
     }
 
-    // حذف الملفات المحددة
+    // التأكد من وجود العناصر في الأرشيف
+    if (files.length > 0) {
+        const validFiles = files.filter(f => archive.files.some(id => id.toString() === f));
+        if (validFiles.length !== files.length) {
+            return res.status(400).json({ message: "❌ بعض الملفات غير موجودة في هذا الأرشيف" });
+        }
+    }
+
+    if (folders.length > 0) {
+        const validFolders = folders.filter(f => archive.folders.some(id => id.toString() === f));
+        if (validFolders.length !== folders.length) {
+            return res.status(400).json({ message: "❌ بعض المجلدات غير موجودة في هذا الأرشيف" });
+        }
+    }
+
+    // حذف الملفات من الأرشيف + إرجاع isArchive = false
     if (files.length > 0) {
         archive.files = archive.files.filter(
             fileId => !files.includes(fileId.toString())
         );
+
+        await File.updateMany(
+            { _id: { $in: files } },
+            { $set: { isArchive: false } }
+        );
     }
 
-    // حذف المجلدات المحددة
+    // حذف المجلدات من الأرشيف + إرجاع isArchive = false لها ولكل محتواها
     if (folders.length > 0) {
         archive.folders = archive.folders.filter(
             folderId => !folders.includes(folderId.toString())
         );
+
+        const restoreFolderAndContents = async (folderId) => {
+            await File.updateMany(
+                { folderId },
+                { $set: { isArchive: false } }
+            );
+
+            const subFolders = await Folder.find({ parentFolder: folderId });
+            for (const sub of subFolders) {
+                await restoreFolderAndContents(sub._id);
+            }
+
+            await Folder.findByIdAndUpdate(folderId, { isArchive: false });
+        };
+
+        for (const folderId of folders) {
+            await restoreFolderAndContents(folderId);
+        }
     }
 
+    // ✅ لو الأرشيف بقى فاضي تمامًا → امسحه نهائيًا
+    if (archive.files.length === 0 && archive.folders.length === 0) {
+        await Archive.findByIdAndDelete(archiveId);
+
+        return res.status(200).json({
+            message: "✅ تم إزالة جميع العناصر من الأرشيف وحذفه نهائيًا لأنه أصبح فارغًا"
+        });
+    }
+
+    // لو لسة فيه عناصر → احفظ التغييرات
     await archive.save();
 
-    // populate التفاصيل بعد الحذف (اختياري)
     await archive.populate([
-        { path: 'files', select: 'fileName url fileType fileSize' },
-        { path: 'folders', select: 'name createdAt' }
+        { path: 'files', select: 'fileName url fileType fileSize isArchive' },
+        { path: 'folders', select: 'name createdAt isArchive' }
     ]);
 
     res.status(200).json({
-        message: "✅ تم حذف العناصر من الأرشيف بنجاح",
+        message: "✅ تم إزالة العناصر من الأرشيف بنجاح وإرجاعها إلى مكانها الأصلي",
         archive
     });
 });
+
+
+
+

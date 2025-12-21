@@ -18,6 +18,11 @@ const fileSchema = new mongoose.Schema({
         type: Number, // MB
         required: true,
     },
+
+    isArchive: {
+        type: Boolean,
+        default: false
+    },
     url: {
         type: String,
         required: true,

@@ -407,10 +407,29 @@ export const createFolder = asyncHandelr(async (req, res, next) => {
 //     });
 // });
 
+
+
+
+
+// export const getUserFolders = asyncHandelr(async (req, res) => {
+//     const userId = req.user._id;
+
+//     const folders = await Folder.find({ userId });
+
+//     const tree = buildTree(folders);
+
+//     res.status(200).json({
+//         message: "✅ تم جلب المجلدات الخاصة بك",
+//         folders: tree
+//     });
+// });
+
+
 export const getUserFolders = asyncHandelr(async (req, res) => {
     const userId = req.user._id;
 
-    const folders = await Folder.find({ userId });
+    // ← الإضافة الوحيدة: فقط المجلدات غير المؤرشفة
+    const folders = await Folder.find({ userId, isArchive: false });
 
     const tree = buildTree(folders);
 
@@ -419,7 +438,6 @@ export const getUserFolders = asyncHandelr(async (req, res) => {
         folders: tree
     });
 });
-
 function buildTree(folders, parent = null) {
     return folders
         .filter(f => String(f.parentFolder) === String(parent))

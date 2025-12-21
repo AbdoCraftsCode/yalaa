@@ -1089,6 +1089,53 @@ export const updateFileName = async (req, res) => {
 //     }
 // };
 
+// export const getUserFiles = async (req, res) => {
+//     try {
+//         const userId = req.user._id;
+//         const { type } = req.query;
+
+//         const typeMap = {
+//             image: ['image/jpg', 'image/jpeg', 'image/png', 'image/gif'],
+//             video: ['video/mp4', 'video/mpeg', 'video/x-msvideo'],
+//             document: ['application/pdf', 'application/json'],
+//             zip: ['application/zip', 'application/x-zip-compressed'],
+//         };
+
+//         const mimeTypes = typeMap[type?.toLowerCase()];
+//         let myFilter = { userId };
+//         if (mimeTypes) {
+//             myFilter.fileType = { $in: mimeTypes };
+//         }
+
+//         const myFiles = await File.find(myFilter);
+//         const totalUsed = myFiles.reduce((sum, file) => sum + file.fileSize, 0);
+
+//         const savedEntries = await SavedFile.find({ userId }).populate("fileId");
+//         const savedFiles = savedEntries
+//             .map(e => e.fileId)
+//             .filter(file => file && (!mimeTypes || mimeTypes.includes(file.fileType)));
+
+//         // دمج الملفات الأصلية والمحفوظة
+//         const allFiles = [...myFiles, ...savedFiles];
+
+//         return res.status(200).json({
+//             files: allFiles,
+//             totalUsedMB: totalUsed
+//         });
+
+//     } catch (err) {
+//         res.status(500).json({ message: '❌ خطأ في جلب الملفات', error: err.message });
+//     }
+// };
+
+
+
+
+
+
+
+
+
 export const getUserFiles = async (req, res) => {
     try {
         const userId = req.user._id;
@@ -1102,7 +1149,7 @@ export const getUserFiles = async (req, res) => {
         };
 
         const mimeTypes = typeMap[type?.toLowerCase()];
-        let myFilter = { userId };
+        let myFilter = { userId, isArchive: false }; // ← الإضافة الوحيدة: فقط الملفات غير المؤرشفة
         if (mimeTypes) {
             myFilter.fileType = { $in: mimeTypes };
         }
@@ -1127,6 +1174,10 @@ export const getUserFiles = async (req, res) => {
         res.status(500).json({ message: '❌ خطأ في جلب الملفات', error: err.message });
     }
 };
+
+
+
+
 
 
 
