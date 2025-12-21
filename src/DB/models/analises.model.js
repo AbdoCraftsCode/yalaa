@@ -5,9 +5,16 @@ const FileShareAnalyticsSchema = new mongoose.Schema({
     fileId: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'File',
-        required: true,
-        unique: true,
+        sparse: true, // يسمح بـ null
+        unique: true  // unique بس لو موجود
     },
+    zipId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'ZipFile',
+        sparse: true,
+        unique: true
+    },
+
     downloads: {
         type: Number,
         default: 0,

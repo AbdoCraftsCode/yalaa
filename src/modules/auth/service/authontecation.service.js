@@ -915,7 +915,236 @@ export const createArchive = asyncHandelr(async (req, res) => {
 
 
 
+export const generateZipShareLink = asyncHandelr(async (req, res) => {
+    try {
+        const userId = req.user._id;
+        const { zipId } = req.body;
 
+        if (!zipId) {
+            return res.status(400).json({ message: '❌ يُرجى إرسال معرف ملف ZIP.' });
+        }
+
+        // التحقق من ملكية الـ ZIP
+        const zip = await ZipFile.findOne({ _id: zipId, userId });
+
+        if (!zip) {
+            return res.status(404).json({
+                message: '❌ ملف ZIP غير موجود أو لا تملك صلاحية الوصول إليه.',
+            });
+        }
+
+        // لو عنده رابط مشاركة بالفعل → يرجعه مباشرة (عشان ما يعملش رابط جديد كل مرة)
+        if (zip.shared && zip.sharedUrl) {
+            return res.status(200).json({
+                message: "✅ رابط المشاركة موجود بالفعل",
+                shareUrl: zip.sharedUrl,
+            });
+        }
+
+        // طلب إنشاء الرابط من Branch
+        const branchRes = await axios.post('https://api2.branch.io/v1/url', {
+            branch_key: process.env.BRANCH_KEY,
+            campaign: 'zip_share',
+            feature: 'sharing',
+            channel: 'in_app',
+            data: {
+                "$deeplink_path": `shared-zip/${zipId}`,
+                "zip_id": zipId,
+                "shared_by": userId.toString(),
+                "$android_url": `https://proplem-production.up.railway.app/shared-zip/${zipId}`,
+                "$fallback_url": `https://proplem-production.up.railway.app/shared-zip/${zipId}`,
+                "$desktop_url": `https://proplem-production.up.railway.app/shared-zip/${zipId}`,
+                "$og_title": "📦 مشاركة ملف ZIP",
+                "$og_description": `تمت مشاركة ملف مضغوط "${zip.fileName}" معك`,
+                "$og_image_url": "https://proplem-production.up.railway.app/share-zip-image.png" // صورة معاينة اختيارية
+            }
+        });
+
+        const shareLink = branchRes.data?.url;
+
+        if (!shareLink) {
+            return res.status(500).json({ message: '❌ لم يتم استلام رابط المشاركة من Branch.' });
+        }
+
+        // تحديث الـ ZIP
+        zip.shared = true;
+        zip.sharedUrl = shareLink;
+        zip.sharedBy = userId;
+        await zip.save();
+
+        return res.status(200).json({
+            message: "✅ تم إنشاء رابط المشاركة للـ ZIP بنجاح",
+            shareUrl: shareLink,
+            zip: {
+                _id: zip._id,
+                fileName: zip.fileName,
+                fileSize: zip.fileSize
+            }
+        });
+
+    } catch (err) {
+        console.error("Error generating ZIP share link:", err.response?.data || err.message);
+        return res.status(500).json({
+            message: "❌ حدث خطأ أثناء إنشاء رابط المشاركة",
+            error: err?.response?.data || err.message,
+        });
+    }
+});
+
+
+
+
+import geoip from 'geoip-lite';
+import { FileShareAnalytics } from "../../../DB/models/analises.model.js";
+
+// افتراضي نفس countryPricing اللي عندك في getSharedFile
+const countryPricing = {
+    EG: 0.05, // مثال
+    SA: 0.10,
+    US: 0.20,
+    DEFAULT: 0.05
+};
+
+// @desc    جلب بيانات ZIP مشترك + حساب أرباح عند المشاهدة
+// @route   GET /api/zips/shared/:zipId
+// @access  Public (من الرابط المشترك)
+export const getSharedZip = asyncHandelr(async (req, res) => {
+    try {
+        const { zipId } = req.params;
+
+        if (!zipId) {
+            return res.status(400).json({ message: "❌ يجب إرسال معرف ملف ZIP." });
+        }
+
+        const zip = await ZipFile.findById(zipId)
+            .populate('userId', 'username email referredBy');
+
+        if (!zip || !zip.shared) {
+            return res.status(404).json({ message: "❌ ملف ZIP غير موجود أو لم يتم مشاركته." });
+        }
+
+        // جلب محتوى الـ ZIP (ملفات + مجلدات)
+        const allFileIds = zip.items.filter(i => i.type === 'file').map(i => i.id);
+        const allFolderIds = zip.items.filter(i => i.type === 'folder').map(i => i.id);
+
+        const [filesData, foldersData] = await Promise.all([
+            File.find({ _id: { $in: allFileIds } })
+                .select('fileName url fileType fileSize createdAt'),
+            Folder.find({ _id: { $in: allFolderIds } })
+                .select('name createdAt')
+        ]);
+
+        const files = filesData.map(f => ({
+            id: f._id,
+            name: f.fileName,
+            type: f.fileType,
+            size: f.fileSize,
+            url: f.url,
+            createdAt: f.createdAt
+        }));
+
+        const folders = foldersData.map(f => ({
+            id: f._id,
+            name: f.name,
+            createdAt: f.createdAt
+        }));
+
+        // حساب IP والبلد
+        const ip = req.headers['x-forwarded-for']?.split(',')[0] ||
+            req.connection?.remoteAddress ||
+            req.socket?.remoteAddress ||
+            '0.0.0.0';
+
+        const geo = geoip.lookup(ip);
+        const countryCode = geo?.country || 'Unknown';
+        const pricePerView = countryPricing[countryCode] || countryPricing.DEFAULT;
+
+        const now = new Date();
+        const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+
+        // تحقق من مشاهدة سابقة من نفس الـ IP خلال 24 ساعة
+        const alreadyViewed = await FileShareAnalytics.findOne({
+            zipId, // لو عايز تميز الـ ZIP عن الملفات، أضف حقل zipId في FileShareAnalytics
+            ip,
+            viewedAt: { $gte: yesterday }
+        });
+
+        if (!alreadyViewed) {
+            // تسجيل المشاهدة الجديدة (يمكنك إنشاء OwnerViewLog للـ ZIP أو استخدام نفس الموديل)
+            // هنا هنستخدم FileShareAnalytics مع إضافة zipId لو موجود
+
+            const promoterReward = zip.userId.referredBy
+                ? {
+                    promoterId: zip.userId.referredBy,
+                    amount: pricePerView * 0.2,
+                    createdAt: now,
+                }
+                : null;
+
+            // داخل if (!alreadyViewed)
+            const existingAnalytics = await FileShareAnalytics.findOne({ zipId });
+
+            if (!existingAnalytics) {
+                await FileShareAnalytics.create({
+                    zipId, // ← هنا zipId
+                    downloads: 0,
+                    views: 1,
+                    earnings: pricePerView,
+                    lastUpdated: now,
+                    viewers: [{ country: countryCode, views: 1, earnings: pricePerView }],
+                    pendingRewards: [{ amount: pricePerView, createdAt: now }],
+                    ...(promoterReward && { promoterRewards: [promoterReward] }),
+                });
+            } else {
+                const viewerIndex = existingAnalytics.viewers.findIndex(v => v.country === countryCode);
+                const updateQuery = {
+                    $inc: { views: 1, earnings: pricePerView },
+                    $set: { lastUpdated: now },
+                    $push: {
+                        pendingRewards: { amount: pricePerView, createdAt: now },
+                        ...(promoterReward && { promoterRewards: promoterReward }),
+                    },
+                };
+
+                if (viewerIndex !== -1) {
+                    updateQuery.$inc[`viewers.${viewerIndex}.views`] = 1;
+                    updateQuery.$inc[`viewers.${viewerIndex}.earnings`] = pricePerView;
+                } else {
+                    updateQuery.$push.viewers = { country: countryCode, views: 1, earnings: pricePerView };
+                }
+
+                await FileShareAnalytics.updateOne({ zipId }, updateQuery);
+            }
+        }
+
+        // الرد النهائي
+        return res.status(200).json({
+            message: "✅ تم جلب ملف ZIP المشترك بنجاح",
+            zip: {
+                id: zip._id,
+                name: zip.fileName,
+                size: zip.fileSize,
+                url: zip.url,
+                sharedBy: {
+                    username: zip.userId.username,
+                    email: zip.userId.email,
+                },
+                createdAt: zip.createdAt,
+                content: {
+                    files,
+                    folders
+                }
+            }
+        });
+
+    } catch (err) {
+        console.error("Error in getSharedZip:", err);
+        return res.status(500).json({
+            message: "❌ حدث خطأ أثناء جلب ملف ZIP",
+            error: err.message
+        });
+    }
+});
 
 
 // @desc    جلب كل الأرشيفات الخاصة بالمستخدم مع تفاصيل الملفات والمجلدات
