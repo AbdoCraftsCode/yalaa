@@ -22,7 +22,7 @@ const subscriptionSchema = new mongoose.Schema(
             type: String,
             required: true
         },
-
+ 
         // صورة الفاتورة
         invoicePic: {
             secure_url: { type: String, required: true },

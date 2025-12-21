@@ -42,6 +42,7 @@ import SubscriptionModell from "../../../DB/models/subscriptionSchemausers.js";
 import { PlanModel } from "../../../DB/models/PlanSchema.js";
 import { Folder } from "../../../DB/models/foldeer.model.js";
 import PaymentServiceSchemaa from "../../../DB/models/PaymentServiceSchemaa.js";
+import { AppLink } from "../../../DB/models/appLinkSchema.js";
 
 // export const signup = asyncHandelr(async (req, res, next) => {
     
@@ -3156,14 +3157,34 @@ export const getUserWithdrawals = async (req, res) => {
 };
 
 
+// export const getAllWithdrawals = async (req, res) => {
+//     try {
+//         const requests = await withdrawalRequestSchemaModel.find()
+//             .populate("userId", "username email") // ✅ جلب اسم و إيميل المستخدم فقط
+//             .sort({ createdAt: -1 }); // الأحدث أولاً
+
+//         return res.status(200).json({
+//             message: "✅ تم جلب جميع طلبات السحب",
+//             withdrawals: requests
+//         });
+//     } catch (err) {
+//         console.error("Error in getAllWithdrawals:", err);
+//         return res.status(500).json({ message: "❌ حدث خطأ أثناء جلب الطلبات", error: err.message });
+//     }
+// };
+
+
+
 export const getAllWithdrawals = async (req, res) => {
     try {
-        const requests = await withdrawalRequestSchemaModel.find()
+        const requests = await withdrawalRequestSchemaModel.find({
+            status: { $in: ["pending", "rejected"] } // ← جلب pending و rejected فقط
+        })
             .populate("userId", "username email") // ✅ جلب اسم و إيميل المستخدم فقط
             .sort({ createdAt: -1 }); // الأحدث أولاً
 
         return res.status(200).json({
-            message: "✅ تم جلب جميع طلبات السحب",
+            message: "✅ تم جلب جميع طلبات السحب المعلقة والمرفوضة",
             withdrawals: requests
         });
     } catch (err) {
@@ -3171,7 +3192,7 @@ export const getAllWithdrawals = async (req, res) => {
         return res.status(500).json({ message: "❌ حدث خطأ أثناء جلب الطلبات", error: err.message });
     }
 };
-
+ 
 export const updateWithdrawalStatus = async (req, res) => {
     try {
         const { id } = req.params;
@@ -3230,6 +3251,63 @@ export const getApprovedWithdrawals = async (req, res) => {
         });
     }
 };
+
+
+
+export const createOrUpdateAppLink = asyncHandelr(async (req, res) => {
+    const { name, link, platform = "both" } = req.body;
+
+    if (!name || !link) {
+        return res.status(400).json({ message: "❌ الاسم واللينك مطلوبين" });
+    }
+
+    // if (req.user.role !== "Admin" && req.user.role !== "Owner") {
+    //     return res.status(403).json({ message: "❌ غير مصرح لك" });
+    // }
+
+    const appLinksDoc = await AppLink.getInstance();
+
+    // لو الاسم موجود → تحديث
+    const existingIndex = appLinksDoc.links.findIndex(l => l.name.toLowerCase() === name.toLowerCase());
+
+    if (existingIndex !== -1) {
+        appLinksDoc.links[existingIndex].link = link.trim();
+        appLinksDoc.links[existingIndex].platform = platform;
+    } else {
+        // إضافة جديد
+        appLinksDoc.links.push({
+            name: name.trim(),
+            link: link.trim(),
+            platform
+        });
+    }
+
+    await appLinksDoc.save();
+
+    res.status(200).json({
+        message: "✅ تم إضافة/تحديث اللينك بنجاح",
+        links: appLinksDoc.links
+    });
+});
+
+
+
+export const getAppLink = asyncHandelr(async (req, res) => {
+    const appLinksDoc = await AppLink.getInstance();
+
+    if (appLinksDoc.links.length === 0) {
+        return res.status(404).json({ message: "📭 لا توجد لينكات للتطبيق حاليًا" });
+    }
+
+    res.status(200).json({
+        message: "✅ تم جلب لينكات التطبيق بنجاح",
+        count: appLinksDoc.links.length,
+        links: appLinksDoc.links
+    });
+});
+
+
+
 
 
 
