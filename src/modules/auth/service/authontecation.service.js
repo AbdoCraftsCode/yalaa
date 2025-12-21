@@ -728,6 +728,76 @@ export const getMyZips = asyncHandelr(async (req, res) => {
 });
 
 
+export const updateZipName = asyncHandelr(async (req, res) => {
+    const { zipId } = req.params;
+    const { fileName } = req.body; // الاسم الجديد
+    const userId = req.user._id;
+
+    if (!fileName || typeof fileName !== "string" || fileName.trim() === "") {
+        return res.status(400).json({ message: "❌ اسم الملف مطلوب ويجب أن يكون نصًا" });
+    }
+
+    const zip = await ZipFile.findById(zipId);
+
+    if (!zip) {
+        return res.status(404).json({ message: "❌ ملف ZIP غير موجود" });
+    }
+
+    if (zip.userId.toString() !== userId.toString()) {
+        return res.status(403).json({ message: "❌ غير مصرح لك بتعديل هذا الملف" });
+    }
+
+    // تنظيف الاسم + التأكد من وجود .zip في النهاية
+    let newFileName = fileName.trim();
+
+    // إزالة .zip لو موجود في النهاية عشان نضيفه صح
+    if (newFileName.toLowerCase().endsWith('.zip')) {
+        newFileName = newFileName.slice(0, -4).trim();
+    }
+
+    // إضافة .zip في النهاية
+    newFileName = `${newFileName}.zip`;
+
+    zip.fileName = newFileName;
+    await zip.save();
+
+    res.status(200).json({
+        message: "✅ تم تعديل اسم الملف بنجاح",
+        zip: {
+            _id: zip._id,
+            fileName: zip.fileName,
+            fileSize: zip.fileSize,
+            url: zip.url,
+            createdAt: zip.createdAt
+        }
+    });
+});
+
+
+
+export const deleteZip = asyncHandelr(async (req, res) => {
+    const { zipId } = req.params;
+    const userId = req.user._id;
+
+    const zip = await ZipFile.findById(zipId);
+
+    if (!zip) {
+        return res.status(404).json({ message: "❌ ملف ZIP غير موجود" });
+    }
+
+    // التأكد من ملكية المستخدم
+    if (zip.userId.toString() !== userId.toString()) {
+        return res.status(403).json({ message: "❌ غير مصرح لك بحذف هذا الملف" });
+    }
+
+    // حذف من الداتابيز
+    await ZipFile.findByIdAndDelete(zipId);
+
+    res.status(200).json({
+        message: "✅ تم حذف ملف ZIP بنجاح",
+        deletedZipId: zipId
+    });
+});
 
 export const downloadZip = asyncHandelr(async (req, res) => {
     const userId = req.user._id;

@@ -2,7 +2,7 @@ import { Router } from "express";
 import { validation } from "../../middlewere/validation.middlewere.js";
 import  * as validators from "../auth/auth.validate.js"
 import { addQuestion, adduser, confirmOTP, createClass, generateShareLink, createFile, createImages, createSupject, getAllClasses, getAllImages, getAllRanks, GetFriendsList, getMyRank, Getprofiledata, getQuestionsByClassAndSubject, getSharedFile, getSubjectsByClass, getUserFiles, getUserRoleById, getUserStorageUsage, resendOTP, shareFile, signup, signupwithGmail, submitAnswer, incrementFileView, getShareLinkAnalytics, getUserAnalytics, updateProfile, getUserEarnings, deleteFile, updateFileName, withdrawEarnings, getWithdrawalHistory, getAllPromoters, getUserAnalyticsadmin, getUserEarningsadmin, getShareLinkAnalyticsadmin, getSharedFilesByUser, createCopyrightReport, getAllCopyrightReports, requestWithdrawal, getAllWithdrawals, saveFile, createChannel, subscribeToChannel, getMySubscribedChannels, createFilechannel, getUserFileschannel, updateUserEarningsByOwner, toggleBrimumeByOwner, createSubscription, getAllSubscriptions, createPlan, getPlans, deletePlan, updatePlan, getAllStorageStats, updateWithdrawalStatus, getApprovedWithdrawals, updateSinglePendingReward, updateAnalyticsData, deleteCopyrightReport, getUserWithdrawals, getShareLinkAnalyticdownloads, createPaymentService, getPaymentServices, deletePaymentService, updatePaymentService } from "./service/regestration.service.js";
-import { createArchive, createZip, deleteUserById, downloadZip, forgetpassword,   getMyArchives,   getMyZips,   getUserStats,   login, loginwithGmail, refreshToken, removeFromArchive, resetpassword, toggleUserBanByOwner } from "./service/authontecation.service.js";
+import { createArchive, createZip, deleteUserById, deleteZip, downloadZip, forgetpassword,   getMyArchives,   getMyZips,   getUserStats,   login, loginwithGmail, refreshToken, removeFromArchive, resetpassword, toggleUserBanByOwner, updateZipName } from "./service/authontecation.service.js";
 import { authentication } from "../../middlewere/authontcation.middlewere.js";
 import { fileValidationTypes, uploadCloudFile } from "../../utlis/multer/cloud.multer.js";
 import { findGroupChat } from "../chat/chat/chat.service.js";
@@ -166,6 +166,10 @@ routr.post("/createArchive", authentication(), createArchive)
 routr.post("/createPaymentService", createPaymentService)
 
 routr.delete("/removeFromArchive/:archiveId",authentication() ,removeFromArchive)
+
+routr.patch("/updateZipName/:zipId", authentication(), updateZipName)
+
+routr.delete("/deleteZip/:zipId", authentication(), deleteZip)
 
 routr.post("/submitAnswer", authentication(), submitAnswer)
 routr.post("/createZip", authentication(), createZip)
